@@ -5,7 +5,7 @@
 export const APP_CONFIG = {
   organizationName: 'Undefined',
   eventLabel: '',
-  endpointUrl: 'https://n8n.undefined.charity/webhook-test/dd47554e-384d-4b72-a4d1-22bf17275adc',
+  endpointUrl: 'https://n8n.undefined.charity/webhook/dd47554e-384d-4b72-a4d1-22bf17275adc',
   termsUrl:
     'https://api.github.com/repos/undefined-charity/undefined-site/contents/src/content/terms/-index.md?ref=main',
   privacyUrl:
