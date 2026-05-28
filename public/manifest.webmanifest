@@ -1,5 +1,5 @@
 {
-  "name": "Undefined event consent",
+  "name": "Undefined Event Consent",
   "short_name": "Undefined",
   "description": "Review and accept the Undefined event Terms & Conditions and Privacy Policy, then receive a check-in pass.",
   "display": "standalone",
@@ -9,7 +9,7 @@
   "theme_color": "#111827",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "/logo.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"

@@ -1,8 +1,8 @@
-const CACHE_NAME = 'undefined-app-v1'
+const CACHE_NAME = 'undefined-app-v2'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(['/', '/manifest.webmanifest', '/icon.svg'])),
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(['/', '/manifest.webmanifest', '/logo.svg'])),
   )
   self.skipWaiting()
 })
