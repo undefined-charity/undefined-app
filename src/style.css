@@ -316,7 +316,7 @@ textarea {
 
 .signature-canvas {
   width: 100%;
-  min-height: 14rem;
+  min-height: 8rem;
   border: 1px dashed #9ca3af;
   border-radius: 0.75rem;
   background: linear-gradient(#fff, #f9fafb);
