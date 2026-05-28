@@ -42,7 +42,6 @@ a {
 
 .hero,
 .primary-card,
-.info-card,
 .banner {
   background: #ffffff;
   border: 1px solid #d1d5db;
@@ -75,7 +74,6 @@ a {
 
 .hero h1,
 .primary-card h2,
-.info-card h2,
 .result-card h3 {
   margin: 0;
   color: #111827;
@@ -83,7 +81,6 @@ a {
 
 .hero-copy,
 .primary-card p,
-.info-card p,
 .result-card p,
 .empty-state p,
 li,
@@ -170,19 +167,13 @@ legend {
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr);
+  grid-template-columns: 1fr;
   gap: 1rem;
   align-items: start;
 }
 
-.primary-card,
-.info-card {
+.primary-card {
   padding: 1.5rem;
-}
-
-.secondary-column {
-  display: grid;
-  gap: 1rem;
 }
 
 .stack {
@@ -248,6 +239,79 @@ textarea {
   justify-content: space-between;
   gap: 0.75rem;
   align-items: center;
+}
+
+.button-row--centered {
+  justify-content: center;
+}
+
+.alert-banner {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem 1.25rem;
+  border-radius: 1rem;
+  border: 1px solid;
+  font-weight: 600;
+}
+
+.alert-banner strong {
+  font-size: 1.05rem;
+}
+
+.alert-banner span {
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.alert-banner code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: rgba(255, 255, 255, 0.55);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+}
+
+.alert-banner--warning {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.alert-banner--danger {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.consent-callout {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1.5rem 1.75rem;
+  border-radius: 1rem;
+  text-align: center;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+}
+
+.consent-callout__heading {
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.consent-callout__subhead {
+  font-size: 1rem;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.consent-callout--in {
+  background: #10b981;
+  color: #ffffff;
+}
+
+.consent-callout--out {
+  background: #dc2626;
+  color: #ffffff;
 }
 
 .signature-canvas {
@@ -357,15 +421,6 @@ textarea {
   image-rendering: pixelated;
   image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
-}
-
-.info-card--scroll {
-  max-height: calc(100vh - 2rem);
-  overflow: auto;
-}
-
-.info-card details + details {
-  margin-top: 1rem;
 }
 
 .policy-reader {
@@ -541,7 +596,6 @@ pre {
 
   .hero,
   .primary-card,
-  .info-card,
   .banner {
     border-radius: 0.85rem;
   }
