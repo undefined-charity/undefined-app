@@ -724,26 +724,39 @@ function attachPolicyReadGates() {
       return
     }
 
-    const markRead = () => {
+    const markRead = (advance = false) => {
       if (state.reads[docKey]) {
         return
       }
       state.reads[docKey] = true
       render()
+      if (advance) {
+        scrollToNextSigningStep(docKey)
+      }
     }
 
     requestAnimationFrame(() => {
       if (node.scrollHeight - node.clientHeight <= 4) {
-        markRead()
+        markRead(false)
       }
     })
 
     node.addEventListener('scroll', () => {
       const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight
       if (distanceFromBottom <= 12) {
-        markRead()
+        markRead(true)
       }
     })
+  })
+}
+
+function scrollToNextSigningStep(justReadDocKey) {
+  requestAnimationFrame(() => {
+    const otherDoc = justReadDocKey === 'terms' ? 'privacy' : 'terms'
+    const target = state.reads[otherDoc]
+      ? document.querySelector('#sign-form')
+      : document.querySelector(`[data-policy-doc="${otherDoc}"]`)?.closest('.policy-reader')
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   })
 }
 
