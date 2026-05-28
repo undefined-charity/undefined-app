@@ -2,12 +2,43 @@
 
 A small installable HTML5 app for Undefined event terms acceptance, photography consent capture, QR issuance, and check-in.
 
+Production deployment lives at **https://tos.undefined.charity**.
+
 ## Commands
 
 - `npm install`
 - `npm run dev`
 - `npm run build`
 - `npm run preview`
+
+## Deployment
+
+This repository auto-deploys to GitHub Pages from `main`.
+
+### Workflow
+
+The `.github/workflows/deploy.yml` workflow runs on every push to `main` (and on every PR for build verification only). On a push to `main` it:
+
+1. Installs dependencies with `npm ci`.
+2. Builds with `npm run build` (Vite outputs to `dist/`).
+3. Uploads `dist/` as a Pages artifact (which includes `public/CNAME` so the custom domain is preserved).
+4. Deploys via `actions/deploy-pages@v4`.
+
+Pull requests run the build job only — no deploy.
+
+### One-time GitHub Pages setup
+
+1. Repo **Settings → Pages → Build and deployment → Source = GitHub Actions**.
+2. (Optional but recommended) Repo **Settings → Pages → Custom domain = tos.undefined.charity** and tick **Enforce HTTPS** once DNS resolves.
+
+### One-time DNS setup at the registrar
+
+Add either:
+
+- A `CNAME` record on `tos.undefined.charity` pointing to `undefined-charity.github.io`, **or**
+- Four `A` records on `tos.undefined.charity` pointing to GitHub Pages' apex IPs (185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153).
+
+GitHub Pages will provision a Let's Encrypt cert automatically once DNS is verified.
 
 ## Modes
 
