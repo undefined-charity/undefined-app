@@ -124,10 +124,6 @@ async function loadPolicyDocuments() {
     ])
 
     state.docs = { terms, privacy }
-    if (state.personalRecord?.certificate && !state.personalRecord.qrDataUrl) {
-      state.personalRecord.qrDataUrl = await createQrCodeDataUrl(state.personalRecord.payload)
-      saveJson(STORAGE_KEYS.personalRecord, state.personalRecord)
-    }
   } catch (error) {
     state.docsError = error instanceof Error ? error.message : 'Unable to load policy documents.'
   } finally {
@@ -186,12 +182,35 @@ function currentPolicyVersion() {
   }
 }
 
-function isCertificateCurrent(certificate) {
-  if (!certificate || !state.docs) {
+function getRecordCertificate(record) {
+  return record?.certificate ?? null
+}
+
+function getRecordSummary(record) {
+  const certificate = getRecordCertificate(record)
+  return {
+    name: certificate?.attendee?.name ?? record?.summary?.name ?? 'Saved attendee',
+    email: certificate?.attendee?.email ?? '',
+    signedAt: certificate?.signedAt ?? record?.summary?.signedAt ?? '',
+    photoConsent: certificate?.photoConsent ?? record?.summary?.photoConsent ?? 'in',
+    policyVersion: certificate?.policyVersion ?? record?.policyVersion ?? null,
+  }
+}
+
+function isPolicyVersionCurrent(policyVersion) {
+  if (!policyVersion || !state.docs) {
     return false
   }
 
-  return certificate.policyVersion?.digest === currentPolicyVersion()?.digest
+  return policyVersion.digest === currentPolicyVersion()?.digest
+}
+
+function isCertificateCurrent(certificate) {
+  return isPolicyVersionCurrent(certificate?.policyVersion)
+}
+
+function isRecordCurrent(record) {
+  return isPolicyVersionCurrent(getRecordSummary(record).policyVersion)
 }
 
 function formatSignedAt(value) {
@@ -288,11 +307,11 @@ function renderPolicyState() {
 }
 
 function renderBanner() {
-  if (!state.personalRecord?.certificate || state.loadingDocs || state.docsError) {
+  if (!state.personalRecord || state.loadingDocs || state.docsError) {
     return ''
   }
 
-  if (isCertificateCurrent(state.personalRecord.certificate)) {
+  if (isRecordCurrent(state.personalRecord)) {
     return '<section class="banner banner--success">Your saved certificate matches the current terms and privacy policy.</section>'
   }
 
@@ -385,27 +404,44 @@ function renderSigningPanel(kind) {
 }
 
 function renderSubmissionCard(record, kind) {
-  const current = isCertificateCurrent(record.certificate)
+  const summary = getRecordSummary(record)
+  const current = isRecordCurrent(record)
   const endpointStatus = record.endpointResult?.skipped
     ? 'Endpoint not configured.'
     : record.endpointResult?.ok
       ? 'Endpoint delivered successfully.'
       : `Endpoint delivery failed: ${record.endpointResult?.message ?? 'Unknown error.'}`
 
+  if (!record.certificate || !record.qrDataUrl) {
+    return `
+      <section class="result-card ${current ? 'result-card--success' : 'result-card--warning'}">
+        <div>
+          <h3>Saved certificate summary</h3>
+          <p>${escapeHtml(summary.name)} signed on ${escapeHtml(formatSignedAt(summary.signedAt))}.</p>
+        </div>
+        <ul class="result-list">
+          <li>${escapeHtml(PHOTO_CONSENT_LABELS[summary.photoConsent] ?? 'Unknown photo consent')}</li>
+          <li>${current ? 'Matches current terms' : 'Needs re-signing before check-in'}</li>
+          <li>The app stores only a local status summary after reload. Keep the downloaded QR image on the device for presentation.</li>
+        </ul>
+      </section>
+    `
+  }
+
   return `
     <section class="result-card ${current ? 'result-card--success' : 'result-card--warning'}">
       <div>
         <h3>${kind === 'personal' ? 'Saved certificate' : 'Latest kiosk certificate'}</h3>
-        <p>${escapeHtml(record.certificate.attendee.name)} signed on ${escapeHtml(formatSignedAt(record.certificate.signedAt))}.</p>
+        <p>${escapeHtml(summary.name)} signed on ${escapeHtml(formatSignedAt(summary.signedAt))}.</p>
       </div>
       <ul class="result-list">
-        <li>${escapeHtml(PHOTO_CONSENT_LABELS[record.certificate.photoConsent] ?? 'Unknown photo consent')}</li>
+        <li>${escapeHtml(PHOTO_CONSENT_LABELS[summary.photoConsent] ?? 'Unknown photo consent')}</li>
         <li>${current ? 'Matches current terms' : 'Needs re-signing before check-in'}</li>
         <li>${escapeHtml(endpointStatus)}</li>
       </ul>
-      <img class="qr-preview" src="${record.qrDataUrl}" alt="QR certificate for ${escapeHtml(record.certificate.attendee.name)}" />
+      <img class="qr-preview" src="${record.qrDataUrl}" alt="QR certificate for ${escapeHtml(summary.name)}" />
       <div class="button-row">
-        <a class="secondary-button" href="${record.qrDataUrl}" download="undefined-certificate-${escapeHtml(record.certificate.attendee.name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-'))}.png">Download QR</a>
+        <a class="secondary-button" href="${record.qrDataUrl}" download="undefined-certificate-${escapeHtml(summary.name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-'))}.png">Download QR</a>
         ${kind === 'personal' && state.shareSupported ? '<button class="secondary-button" type="button" data-action="share-qr">Share QR</button>' : ''}
         ${kind === 'kiosk' ? '<button class="primary-button" type="button" data-action="kiosk-done">Done / reset kiosk</button>' : ''}
       </div>
@@ -513,7 +549,7 @@ function renderSettingsPanel() {
 }
 
 function renderRecordCard(record) {
-  if (!record?.certificate) {
+  if (!record) {
     return `
       <section class="info-card">
         <h2>Certificate status</h2>
@@ -522,13 +558,14 @@ function renderRecordCard(record) {
     `
   }
 
-  const current = isCertificateCurrent(record.certificate)
+  const summary = getRecordSummary(record)
+  const current = isRecordCurrent(record)
   return `
     <section class="info-card">
       <h2>Certificate status</h2>
-      <p><strong>${escapeHtml(record.certificate.attendee.name)}</strong></p>
-      <p>${current ? 'Current' : 'Out of date'} · ${escapeHtml(PHOTO_CONSENT_LABELS[record.certificate.photoConsent])}</p>
-      <p>Signed ${escapeHtml(formatSignedAt(record.certificate.signedAt))}</p>
+      <p><strong>${escapeHtml(summary.name)}</strong></p>
+      <p>${current ? 'Current' : 'Out of date'} · ${escapeHtml(PHOTO_CONSENT_LABELS[summary.photoConsent])}</p>
+      <p>Signed ${escapeHtml(formatSignedAt(summary.signedAt))}</p>
     </section>
   `
 }
@@ -723,7 +760,7 @@ async function submitSigningForm(kind) {
   state.message = ''
   if (kind === 'personal') {
     state.personalRecord = record
-    saveJson(STORAGE_KEYS.personalRecord, record)
+    saveJson(STORAGE_KEYS.personalRecord, createStoredPersonalRecord(record))
   } else {
     state.kioskRecord = record
   }
@@ -876,8 +913,19 @@ function decodeAndStoreCertificate(payload) {
   render()
 }
 
+function createStoredPersonalRecord(record) {
+  return {
+    summary: {
+      name: record.certificate.attendee.name,
+      signedAt: record.certificate.signedAt,
+      photoConsent: record.certificate.photoConsent,
+    },
+    policyVersion: record.certificate.policyVersion,
+  }
+}
+
 function toBase64Url(value) {
-  return btoa(unescape(encodeURIComponent(value)))
+  return encodeUtf8ToBase64(value)
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/=+$/g, '')
@@ -886,11 +934,26 @@ function toBase64Url(value) {
 function fromBase64Url(value) {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
   const padding = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4))
-  return decodeURIComponent(escape(atob(`${normalized}${padding}`)))
+  return decodeBase64ToUtf8(`${normalized}${padding}`)
 }
 
 function fromBase64ToUtf8(value) {
-  return decodeURIComponent(escape(atob(value)))
+  return decodeBase64ToUtf8(value)
+}
+
+function encodeUtf8ToBase64(value) {
+  const bytes = new TextEncoder().encode(value)
+  let binary = ''
+  bytes.forEach((byte) => {
+    binary += String.fromCharCode(byte)
+  })
+  return btoa(binary)
+}
+
+function decodeBase64ToUtf8(value) {
+  const binary = atob(value)
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  return new TextDecoder().decode(bytes)
 }
 
 async function hashText(value) {
