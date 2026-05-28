@@ -745,11 +745,12 @@ async function submitSigningForm(kind) {
   }
 
   const formData = new FormData(form)
+  const photoConsent = formData.get('photoConsent').toString()
   const signatureDataUrl = activeSignaturePad.toDataURL('image/png')
   const certificate = await buildCertificate({
     name: formData.get('name').toString().trim(),
     email: formData.get('email').toString().trim(),
-    photoConsent: formData.get('photoConsent').toString(),
+    photoConsent,
     signatureDataUrl,
   })
   const payload = encodeCertificatePayload(certificate)
@@ -760,7 +761,14 @@ async function submitSigningForm(kind) {
   state.message = ''
   if (kind === 'personal') {
     state.personalRecord = record
-    saveJson(STORAGE_KEYS.personalRecord, createStoredPersonalRecord(record))
+    saveJson(
+      STORAGE_KEYS.personalRecord,
+      createStoredPersonalRecord({
+        signedAt: certificate.signedAt,
+        photoConsent,
+        policyVersion: currentPolicyVersion(),
+      }),
+    )
   } else {
     state.kioskRecord = record
   }
@@ -913,14 +921,13 @@ function decodeAndStoreCertificate(payload) {
   render()
 }
 
-function createStoredPersonalRecord(record) {
+function createStoredPersonalRecord({ signedAt, photoConsent, policyVersion }) {
   return {
     summary: {
-      name: record.certificate.attendee.name,
-      signedAt: record.certificate.signedAt,
-      photoConsent: record.certificate.photoConsent,
+      signedAt,
+      photoConsent,
     },
-    policyVersion: record.certificate.policyVersion,
+    policyVersion,
   }
 }
 
