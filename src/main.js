@@ -666,6 +666,7 @@ function bindUi() {
     state.message = ''
     window.localStorage.removeItem(STORAGE_KEYS.record)
     render()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   })
 
   document.querySelector('[data-action="restart-scanner"]')?.addEventListener('click', () => {
@@ -874,6 +875,14 @@ async function submitSigningForm() {
   state.drafts.sign = defaultFormDraft()
   state.reads = { terms: false, privacy: false }
   render()
+  scrollToQrResult()
+}
+
+function scrollToQrResult() {
+  requestAnimationFrame(() => {
+    const target = document.querySelector('.qr-preview')?.closest('.result-card') ?? document.querySelector('.qr-preview')
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  })
 }
 
 async function extractSignature() {
