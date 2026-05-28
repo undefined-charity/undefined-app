@@ -431,6 +431,26 @@ function renderPolicyReader(docKey, doc, hasRead) {
   `
 }
 
+function renderConsentCallout(photoConsent) {
+  if (photoConsent === 'in') {
+    return `
+      <section class="consent-callout consent-callout--in">
+        <span class="consent-callout__heading">📷 Consented to photos</span>
+        <span class="consent-callout__subhead">Photography is OK</span>
+      </section>
+    `
+  }
+  if (photoConsent === 'out') {
+    return `
+      <section class="consent-callout consent-callout--out">
+        <span class="consent-callout__heading">🚫 Opted OUT of photos</span>
+        <span class="consent-callout__subhead">Do not photograph this attendee</span>
+      </section>
+    `
+  }
+  return ''
+}
+
 function renderSubmissionCard(record) {
   const summary = getRecordSummary(record)
   const current = isRecordCurrent(record)
@@ -439,16 +459,17 @@ function renderSubmissionCard(record) {
     : record.endpointResult?.ok
       ? 'Endpoint delivered successfully.'
       : `Endpoint delivery failed: ${record.endpointResult?.message ?? 'Unknown error.'}`
+  const consentCallout = renderConsentCallout(summary.photoConsent)
 
   if (!record.acceptance || !record.qrDataUrl) {
     return `
+      ${consentCallout}
       <section class="result-card ${current ? 'result-card--success' : 'result-card--warning'}">
         <div>
           <h3>Saved acceptance summary</h3>
           <p>${escapeHtml(summary.name)} signed on ${escapeHtml(formatSignedAt(summary.signedAt))}.</p>
         </div>
         <ul class="result-list">
-          <li>${escapeHtml(PHOTO_CONSENT_LABELS[summary.photoConsent] ?? 'Unknown photo consent')}</li>
           <li>${current ? 'Matches current terms' : 'Needs re-signing before check-in'}</li>
           <li>The app stores only a local status summary after reload. Keep the downloaded QR image on the device for presentation.</li>
         </ul>
@@ -460,13 +481,13 @@ function renderSubmissionCard(record) {
   }
 
   return `
+    ${consentCallout}
     <section class="result-card ${current ? 'result-card--success' : 'result-card--warning'}">
       <div>
         <h3>Acceptance QR</h3>
         <p>${escapeHtml(summary.name)} signed on ${escapeHtml(formatSignedAt(summary.signedAt))}.</p>
       </div>
       <ul class="result-list">
-        <li>${escapeHtml(PHOTO_CONSENT_LABELS[summary.photoConsent] ?? 'Unknown photo consent')}</li>
         <li>${current ? 'Matches current terms' : 'Needs re-signing before check-in'}</li>
         <li>${escapeHtml(endpointStatus)}</li>
       </ul>
@@ -564,22 +585,7 @@ function renderCheckinResult() {
     `)
   }
 
-  const consentCallout =
-    acceptance.photoConsent === 'in'
-      ? `
-        <section class="consent-callout consent-callout--in">
-          <span class="consent-callout__heading">📷 Attendee consented to photos</span>
-          <span class="consent-callout__subhead">Photography is OK</span>
-        </section>
-      `
-      : acceptance.photoConsent === 'out'
-        ? `
-          <section class="consent-callout consent-callout--out">
-            <span class="consent-callout__heading">🚫 Attendee opted OUT of photos</span>
-            <span class="consent-callout__subhead">Do not photograph this attendee</span>
-          </section>
-        `
-        : ''
+  const consentCallout = renderConsentCallout(acceptance.photoConsent)
 
   let endpointLine = ''
   if (endpointResult) {
