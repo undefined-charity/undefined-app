@@ -108,7 +108,7 @@ async function loadPolicyDocuments() {
 
     state.docs = { terms, privacy }
   } catch (error) {
-    state.docsError = error instanceof Error ? error.message : 'Unable to load policy documents.'
+    state.docsError = error instanceof Error ? error.message : 'Couldn\u2019t load the latest policies.'
   } finally {
     state.loadingDocs = false
     render()
@@ -118,7 +118,7 @@ async function loadPolicyDocuments() {
 async function fetchPolicyDocument(url, fallbackTitle) {
   const response = await fetch(url, { cache: 'no-store' })
   if (!response.ok) {
-    throw new Error(`Unable to load ${fallbackTitle} from ${url}.`)
+    throw new Error(`Couldn\u2019t load the latest ${fallbackTitle}. Please try again.`)
   }
 
   const contentType = response.headers.get('content-type') || ''
@@ -263,9 +263,8 @@ function render() {
     <div class="shell">
       <header class="hero">
         <div class="hero-main">
-          <p class="eyebrow">Installable HTML5 acceptance app</p>
-          <h1>Undefined acceptance</h1>
-          <p class="hero-copy">Read the current policies, sign once, and generate a QR that any kiosk can validate against the latest policy versions — no accounts, no shared secrets.</p>
+          <h1>Welcome to Undefined</h1>
+          <p class="hero-copy">Please take a moment to review our Terms &amp; Conditions and Privacy Policy, then sign to receive your event check-in pass.</p>
           ${policyStateMarkup}
         </div>
         <div class="mode-switch" role="tablist" aria-label="Application modes">
@@ -300,7 +299,7 @@ function renderModeButton(mode) {
 
 function renderPolicyState() {
   if (state.loadingDocs) {
-    return '<p class="status-pill">Loading current terms…</p>'
+    return '<p class="status-pill">Loading the latest policies…</p>'
   }
 
   if (state.docsError) {
@@ -309,8 +308,8 @@ function renderPolicyState() {
 
   return `
     <div class="status-stack">
-      <p class="status-pill">Terms ${escapeHtml(state.docs.terms.lastUpdated)} · <code>${escapeHtml(shortSha(state.docs.terms.sha))}</code></p>
-      <p class="status-pill">Privacy ${escapeHtml(state.docs.privacy.lastUpdated)} · <code>${escapeHtml(shortSha(state.docs.privacy.sha))}</code></p>
+      <p class="status-pill">Terms · updated ${escapeHtml(state.docs.terms.lastUpdated)}</p>
+      <p class="status-pill">Privacy · updated ${escapeHtml(state.docs.privacy.lastUpdated)}</p>
     </div>
   `
 }
@@ -321,22 +320,22 @@ function renderBanner() {
   }
 
   if (isRecordCurrent(state.record)) {
-    return '<section class="banner banner--success">Your saved acceptance matches the current terms and privacy policy.</section>'
+    return '<section class="banner banner--success">You\u2019re all set. Your pass matches the latest Terms and Privacy Policy.</section>'
   }
 
-  return '<section class="banner banner--warning">Your saved acceptance is no longer current. Please re-sign before your next event.</section>'
+  return '<section class="banner banner--warning">Our policies have been updated since you last signed. Please review and sign again before your next event.</section>'
 }
 
 function renderModePanel() {
   if (state.loadingDocs) {
-    return '<div class="empty-state"><p>Loading policy content…</p></div>'
+    return '<div class="empty-state"><p>Loading the latest policies…</p></div>'
   }
 
   if (state.docsError) {
     return `
       <div class="empty-state">
         <p>${escapeHtml(state.docsError)}</p>
-        <button class="primary-button" type="button" data-action="reload-docs">Retry loading policies</button>
+        <button class="primary-button" type="button" data-action="reload-docs">Try again</button>
       </div>
     `
   }
@@ -356,20 +355,20 @@ function renderSigningPanel() {
   const disabledAttr = bothRead ? '' : 'disabled'
   const lockedNote = bothRead
     ? ''
-    : '<p class="locked-note">Scroll to the end of each policy to unlock the acceptance form.</p>'
+    : '<p class="locked-note">Please read both policies (scroll to the end of each one) to enable the form.</p>'
 
   return `
     <div class="stack">
       <div>
-        <h2>Sign acceptance</h2>
-        <p>Read both policies through, then sign. Personal use? Keep the QR on your phone. Kiosk use? Hit Reset after each attendee.</p>
+        <h2>Sign in</h2>
+        <p>Please read both policies below, then enter your details and sign to receive your check-in pass.</p>
       </div>
 
       ${renderPolicyReader('terms', state.docs.terms, reads.terms)}
       ${renderPolicyReader('privacy', state.docs.privacy, reads.privacy)}
 
       <form id="sign-form" class="stack form-grid acceptance-form ${bothRead ? '' : 'is-locked'}">
-        <h3>Your acceptance</h3>
+        <h3>Your details</h3>
         ${lockedNote}
 
         <label>
@@ -383,19 +382,19 @@ function renderSigningPanel() {
         </label>
 
         <fieldset class="inline-fieldset" ${disabledAttr}>
-          <legend>Photography consent</legend>
-          <label><input type="radio" name="photoConsent" value="in" ${draft.photoConsent === 'in' ? 'checked' : ''} ${disabledAttr} /> Opt in</label>
-          <label><input type="radio" name="photoConsent" value="out" ${draft.photoConsent === 'out' ? 'checked' : ''} ${disabledAttr} /> Opt out</label>
+          <legend>Event photography</legend>
+          <label><input type="radio" name="photoConsent" value="in" ${draft.photoConsent === 'in' ? 'checked' : ''} ${disabledAttr} /> I\u2019m happy to be photographed</label>
+          <label><input type="radio" name="photoConsent" value="out" ${draft.photoConsent === 'out' ? 'checked' : ''} ${disabledAttr} /> Please don\u2019t photograph me</label>
         </fieldset>
 
         <label class="checkbox-row">
           <input name="acceptTerms" type="checkbox" ${draft.acceptTerms ? 'checked' : ''} ${disabledAttr} required />
-          <span>I have read and accept the Terms &amp; Conditions dated ${escapeHtml(state.docs.terms.lastUpdated)}.</span>
+          <span>I have read and accept the Terms &amp; Conditions (updated ${escapeHtml(state.docs.terms.lastUpdated)}).</span>
         </label>
 
         <label class="checkbox-row">
           <input name="acceptPrivacy" type="checkbox" ${draft.acceptPrivacy ? 'checked' : ''} ${disabledAttr} required />
-          <span>I have read and accept the Privacy Policy dated ${escapeHtml(state.docs.privacy.lastUpdated)}.</span>
+          <span>I have read and accept the Privacy Policy (updated ${escapeHtml(state.docs.privacy.lastUpdated)}).</span>
         </label>
 
         <div class="signature-block">
@@ -406,7 +405,7 @@ function renderSigningPanel() {
           <canvas id="sign-signature" class="signature-canvas" aria-label="Signature pad"></canvas>
         </div>
 
-        <button class="primary-button" type="submit" ${disabledAttr}>Accept &amp; generate QR</button>
+        <button class="primary-button" type="submit" ${disabledAttr}>Accept &amp; continue</button>
       </form>
 
       ${record ? renderSubmissionCard(record) : ''}
@@ -420,9 +419,9 @@ function renderPolicyReader(docKey, doc, hasRead) {
       <header class="policy-reader__header">
         <div>
           <h3>${escapeHtml(doc.title)}</h3>
-          <p class="policy-meta">Updated ${escapeHtml(doc.lastUpdated)} · commit <code>${escapeHtml(shortSha(doc.sha))}</code></p>
+          <p class="policy-meta">Updated ${escapeHtml(doc.lastUpdated)}</p>
         </div>
-        <span class="policy-reader__badge">${hasRead ? '✓ Read' : 'Scroll to end to confirm'}</span>
+        <span class="policy-reader__badge">${hasRead ? '✓ Read' : 'Please read'}</span>
       </header>
       <div class="policy-reader__body" data-policy-body data-policy-doc="${docKey}" tabindex="0">
         ${doc.html}
@@ -435,16 +434,16 @@ function renderConsentCallout(photoConsent) {
   if (photoConsent === 'in') {
     return `
       <section class="consent-callout consent-callout--in">
-        <span class="consent-callout__heading">📷 Consented to photos</span>
-        <span class="consent-callout__subhead">Photography is OK</span>
+        <span class="consent-callout__heading">📷 Photos OK</span>
+        <span class="consent-callout__subhead">Agreed to event photography</span>
       </section>
     `
   }
   if (photoConsent === 'out') {
     return `
       <section class="consent-callout consent-callout--out">
-        <span class="consent-callout__heading">🚫 Opted OUT of photos</span>
-        <span class="consent-callout__subhead">Do not photograph this attendee</span>
+        <span class="consent-callout__heading">🚫 No photos</span>
+        <span class="consent-callout__subhead">Please respect their preference</span>
       </section>
     `
   }
@@ -454,11 +453,6 @@ function renderConsentCallout(photoConsent) {
 function renderSubmissionCard(record) {
   const summary = getRecordSummary(record)
   const current = isRecordCurrent(record)
-  const endpointStatus = record.endpointResult?.skipped
-    ? 'Endpoint not configured.'
-    : record.endpointResult?.ok
-      ? 'Endpoint delivered successfully.'
-      : `Endpoint delivery failed: ${record.endpointResult?.message ?? 'Unknown error.'}`
   const consentCallout = renderConsentCallout(summary.photoConsent)
 
   if (!record.acceptance || !record.qrDataUrl) {
@@ -466,15 +460,15 @@ function renderSubmissionCard(record) {
       ${consentCallout}
       <section class="result-card ${current ? 'result-card--success' : 'result-card--warning'}">
         <div>
-          <h3>Saved acceptance summary</h3>
-          <p>${escapeHtml(summary.name)} signed on ${escapeHtml(formatSignedAt(summary.signedAt))}.</p>
+          <h3>Your pass</h3>
+          <p>Signed by ${escapeHtml(summary.name)} on ${escapeHtml(formatSignedAt(summary.signedAt))}.</p>
         </div>
         <ul class="result-list">
-          <li>${current ? 'Matches current terms' : 'Needs re-signing before check-in'}</li>
-          <li>The app stores only a local status summary after reload. Keep the downloaded QR image on the device for presentation.</li>
+          <li>${current ? 'Up to date with the latest Terms and Privacy Policy.' : 'Out of date — please sign again before your next event.'}</li>
+          <li>Keep your downloaded pass image on this device to show at check-in.</li>
         </ul>
         <div class="button-row">
-          <button class="secondary-button" type="button" data-action="reset-sign">Reset &amp; sign again</button>
+          <button class="secondary-button" type="button" data-action="reset-sign">Done</button>
         </div>
       </section>
     `
@@ -484,23 +478,19 @@ function renderSubmissionCard(record) {
     ${consentCallout}
     <section class="result-card ${current ? 'result-card--success' : 'result-card--warning'}">
       <div>
-        <h3>Acceptance QR</h3>
-        <p>${escapeHtml(summary.name)} signed on ${escapeHtml(formatSignedAt(summary.signedAt))}.</p>
+        <h3>Your check-in pass</h3>
+        <p>Signed by ${escapeHtml(summary.name)} on ${escapeHtml(formatSignedAt(summary.signedAt))}.</p>
       </div>
       <ul class="result-list">
-        <li>${current ? 'Matches current terms' : 'Needs re-signing before check-in'}</li>
-        <li>${escapeHtml(endpointStatus)}</li>
+        <li>${current ? 'Up to date with the latest Terms and Privacy Policy.' : 'Out of date — please sign again before your next event.'}</li>
+        <li>Show this pass at check-in. You can also save the image or share it to keep a copy.</li>
       </ul>
-      <img class="qr-preview" src="${record.qrDataUrl}" alt="QR for ${escapeHtml(summary.name)}" />
+      <img class="qr-preview" src="${record.qrDataUrl}" alt="Check-in pass for ${escapeHtml(summary.name)}" />
       <div class="button-row">
-        <a class="secondary-button" href="${record.qrDataUrl}" download="${escapeHtml(buildDownloadFilename(summary))}">Download QR</a>
-        ${state.shareSupported ? '<button class="secondary-button" type="button" data-action="share-qr">Share QR</button>' : ''}
-        <button class="primary-button" type="button" data-action="reset-sign">Reset &amp; sign again</button>
+        <a class="secondary-button" href="${record.qrDataUrl}" download="${escapeHtml(buildDownloadFilename(summary))}">Save image</a>
+        ${state.shareSupported ? '<button class="secondary-button" type="button" data-action="share-qr">Share</button>' : ''}
+        <button class="primary-button" type="button" data-action="reset-sign">Done</button>
       </div>
-      <details>
-        <summary>Acceptance payload</summary>
-        <pre>${escapeHtml(JSON.stringify(record.acceptance, null, 2))}</pre>
-      </details>
     </section>
   `
 }
@@ -511,7 +501,7 @@ function renderCheckinPanel() {
       <div class="stack">
         ${renderCheckinResult()}
         <div class="button-row button-row--centered">
-          <button class="primary-button" type="button" data-action="reset-checkin">Scan another QR</button>
+          <button class="primary-button" type="button" data-action="reset-checkin">Scan another</button>
         </div>
       </div>
     `
@@ -520,8 +510,8 @@ function renderCheckinPanel() {
   return `
     <div class="stack">
       <div>
-        <h2>Scan attendee QR</h2>
-        <p>Point the camera at the attendee's QR code. Or upload a photo / paste the payload below.</p>
+        <h2>Scan a check-in pass</h2>
+        <p>Hold the attendee\u2019s pass up to the camera. You can also upload a photo or paste the code text.</p>
       </div>
 
       <div class="scanner-card">
@@ -530,14 +520,14 @@ function renderCheckinPanel() {
           <button class="primary-button" type="button" data-action="restart-scanner">Restart camera</button>
           <label class="secondary-button file-button">
             <input id="scan-upload" type="file" accept="image/*" capture="environment" />
-            Scan from image
+            Scan from photo
           </label>
         </div>
         <label>
-          <span>Paste QR payload</span>
-          <textarea id="pasted-payload" rows="4" placeholder="Paste the text stored in a QR code if scanning is unavailable.">${escapeHtml(state.drafts.pastedPayload)}</textarea>
+          <span>Paste pass code</span>
+          <textarea id="pasted-payload" rows="4" placeholder="Paste the text of the pass if scanning isn\u2019t available.">${escapeHtml(state.drafts.pastedPayload)}</textarea>
         </label>
-        <button class="secondary-button" type="button" data-action="decode-pasted">Validate pasted payload</button>
+        <button class="secondary-button" type="button" data-action="decode-pasted">Check this code</button>
       </div>
     </div>
   `
@@ -551,65 +541,52 @@ function renderCheckinResult() {
   if (!state.checkinResult.valid) {
     return `
       <section class="alert-banner alert-banner--danger">
-        <strong>⚠ Invalid QR</strong>
+        <strong>⚠ Pass not recognised</strong>
         <span>${escapeHtml(state.checkinResult.message)}</span>
       </section>
     `
   }
 
-  const { acceptance, current, issuerOk, expectedIssuer, duplicate, signatureStrokes, endpointResult } = state.checkinResult
+  const { acceptance, current, issuerOk, duplicate, signatureStrokes } = state.checkinResult
 
   const banners = []
   if (duplicate) {
     banners.push(`
       <section class="alert-banner alert-banner--warning">
-        <strong>⚠ QR already scanned this session</strong>
-        <span>First seen ${escapeHtml(formatSignedAt(duplicate.firstScannedAt))} · this is scan #${duplicate.count}. Verify photo ID before allowing entry.</span>
+        <strong>⚠ Already scanned today</strong>
+        <span>First scanned at ${escapeHtml(formatSignedAt(duplicate.firstScannedAt))} \u2014 this is scan #${duplicate.count}. Please check the attendee\u2019s ID before allowing entry.</span>
       </section>
     `)
   }
   if (!issuerOk) {
     banners.push(`
       <section class="alert-banner alert-banner--warning">
-        <strong>⚠ Issued by a different host</strong>
-        <span>QR claims issuer <code>${escapeHtml(acceptance.issuer ?? 'unknown')}</code>; this kiosk is <code>${escapeHtml(expectedIssuer)}</code>. Verify the attendee.</span>
+        <strong>⚠ Pass from another version of the app</strong>
+        <span>This pass wasn\u2019t issued by this kiosk. Please verify the attendee.</span>
       </section>
     `)
   }
   if (!current) {
     banners.push(`
       <section class="alert-banner alert-banner--warning">
-        <strong>⚠ Re-sign required</strong>
-        <span>This QR was signed against older policy versions. Ask the attendee to re-sign before allowing entry.</span>
+        <strong>⚠ Pass is out of date</strong>
+        <span>Our policies have been updated since this pass was issued. Please ask the attendee to sign again.</span>
       </section>
     `)
   }
 
   const consentCallout = renderConsentCallout(acceptance.photoConsent)
 
-  let endpointLine = ''
-  if (endpointResult) {
-    if (endpointResult.skipped) {
-      endpointLine = 'Endpoint not configured.'
-    } else if (endpointResult.ok) {
-      endpointLine = 'Check-in posted to endpoint.'
-    } else {
-      endpointLine = `Endpoint POST failed: ${endpointResult.message ?? 'Unknown error.'}`
-    }
-  }
-
   let signatureBlock = ''
   if (signatureStrokes && acceptance.signature) {
     signatureBlock = `
       <div class="signature-display">
-        <span>Signature on file:</span>
+        <span>Signature</span>
         <canvas data-signature-canvas
                 data-signature-width="${escapeHtml(acceptance.signature.width)}"
                 data-signature-height="${escapeHtml(acceptance.signature.height)}"></canvas>
       </div>
     `
-  } else if (acceptance.signatureHash) {
-    signatureBlock = `<p class="signature-display-note">Signature image not embedded in QR (only its hash). The full signature was POSTed to the endpoint at signing time.</p>`
   }
 
   return `
@@ -620,10 +597,8 @@ function renderCheckinResult() {
       <ul class="result-list">
         <li><strong>Email:</strong> ${escapeHtml(acceptance.email)}</li>
         <li><strong>Signed:</strong> ${escapeHtml(formatSignedAt(acceptance.signedAt))}</li>
-        <li><strong>Terms version:</strong> ${escapeHtml(acceptance.terms?.lastUpdated ?? 'Unknown')} (<code>${escapeHtml(shortSha(acceptance.terms?.sha))}</code>)</li>
-        <li><strong>Privacy version:</strong> ${escapeHtml(acceptance.privacy?.lastUpdated ?? 'Unknown')} (<code>${escapeHtml(shortSha(acceptance.privacy?.sha))}</code>)</li>
-        <li><strong>Issuer:</strong> <code>${escapeHtml(acceptance.issuer ?? 'unknown')}</code></li>
-        ${endpointLine ? `<li>${escapeHtml(endpointLine)}</li>` : ''}
+        <li><strong>Terms version:</strong> updated ${escapeHtml(acceptance.terms?.lastUpdated ?? 'Unknown')}</li>
+        <li><strong>Privacy version:</strong> updated ${escapeHtml(acceptance.privacy?.lastUpdated ?? 'Unknown')}</li>
       </ul>
       ${signatureBlock}
     </section>
@@ -660,7 +635,7 @@ function bindUi() {
         await navigator.share({ files: [file], title: 'Undefined acceptance QR' })
       }
     } catch {
-      state.message = 'Unable to share the QR code on this device.'
+      state.message = 'Couldn\u2019t share the pass on this device.'
       render()
     }
   })
@@ -705,7 +680,7 @@ function bindUi() {
       const result = await QrScanner.scanImage(file)
       await decodeAndStoreAcceptance(result)
     } catch {
-      state.checkinResult = { valid: false, message: 'No QR code could be read from that image.' }
+      state.checkinResult = { valid: false, message: 'Couldn\u2019t find a code in that photo. Please try another.' }
       render()
     }
   })
@@ -812,7 +787,7 @@ function resizeSignatureCanvas(canvas) {
 
 async function submitSigningForm() {
   if (!state.reads.terms || !state.reads.privacy) {
-    state.message = 'Please read both policies through to the end before accepting.'
+    state.message = 'Please read both policies to the end before continuing.'
     render()
     return
   }
@@ -823,7 +798,7 @@ async function submitSigningForm() {
   }
 
   if (!activeSignaturePad || activeSignaturePad.isEmpty()) {
-    alert('Please provide a signature before continuing.')
+    alert('Please sign before continuing.')
     return
   }
 
@@ -875,9 +850,7 @@ async function submitSigningForm() {
     omittedSignature,
     signatureDataUrl: signature.signatureDataUrl,
   }
-  state.message = omittedSignature
-    ? 'Signature was too large to fit in the QR; only the signature hash was embedded. The full image was POSTed to the configured endpoint.'
-    : ''
+  state.message = ''
   state.record = record
   saveJson(
     STORAGE_KEYS.record,
@@ -1085,7 +1058,7 @@ async function startScanner(forceRestart = false) {
   } catch {
     state.checkinResult = {
       valid: false,
-      message: 'Camera access is unavailable. Use image upload or paste the QR payload instead.',
+      message: 'Camera isn\u2019t available. Try uploading a photo or pasting the code.',
     }
     render()
   }
@@ -1112,7 +1085,7 @@ async function decodeAndStoreAcceptance(payload) {
   } catch {
     state.checkinResult = {
       valid: false,
-      message: 'That QR payload is not a valid Undefined acceptance.',
+      message: 'That doesn\u2019t look like an Undefined event pass.',
     }
     render()
     return
@@ -1122,7 +1095,7 @@ async function decodeAndStoreAcceptance(payload) {
   if (!claimedHash) {
     state.checkinResult = {
       valid: false,
-      message: 'QR is missing its payload hash — likely from an older app version. Ask the attendee to re-sign.',
+      message: 'This pass was issued by an older version of the app. Please ask the attendee to sign again.',
     }
     render()
     return
@@ -1133,7 +1106,7 @@ async function decodeAndStoreAcceptance(payload) {
   if (expectedHash !== claimedHash) {
     state.checkinResult = {
       valid: false,
-      message: 'Payload hash mismatch — the QR is corrupted or has been tampered with.',
+      message: 'This pass appears damaged or invalid. Please ask the attendee to sign again.',
     }
     render()
     return

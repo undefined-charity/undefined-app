@@ -1,85 +1,93 @@
-# undefined-app
+# Undefined event consent
 
-A small installable HTML5 app for Undefined event terms acceptance, photography consent capture, QR issuance, and check-in.
+A small, installable web app that lets attendees of Undefined charity events review the current **Terms & Conditions** and **Privacy Policy**, capture their consent and photography preference with a signature, and receive a check-in pass that any Undefined device can validate at the door.
 
-Production deployment lives at **https://tos.undefined.charity**.
+Live at **https://tos.undefined.charity**.
 
-## Commands
+## How it works
 
-- `npm install`
-- `npm run dev`
-- `npm run build`
-- `npm run preview`
+### For attendees
+
+1. Open the app on your phone (or use the kiosk provided at the event).
+2. Read the Terms & Conditions and Privacy Policy in full.
+3. Enter your name, email, photography preference, and signature.
+4. You receive a check-in pass — keep the image on your phone, save it, or share it.
+
+### For event staff
+
+1. Switch the app to **Check-in** (top-right of the page).
+2. Hold the attendee's pass up to the camera, or upload a photo of it.
+3. The screen shows a large **Photos OK** or **No photos** banner and the attendee's details.
+4. Warnings appear at the top if the pass has already been scanned, was issued by a different version of the app, or was signed against older policy versions.
+
+## Configuration
+
+Everything site-wide lives in [`src/config.js`](src/config.js) and is intentionally **not** editable from inside the app — it can only be changed by opening a pull request. The values are:
+
+- `organizationName` and `eventLabel` — shown on the pass payload.
+- `endpointUrl` — n8n webhook that receives every signing (`action: "agree"`) and every successful check-in (`action: "checkin"`).
+- `termsUrl` and `privacyUrl` — GitHub Contents API URLs for the canonical Terms and Privacy markdown documents. The app fetches these live on every launch.
+
+## How a check-in pass is verified
+
+There are no signing keys, certificates, or shared secrets. Each pass is a base64url-encoded JSON object containing the attendee's details, a snapshot of the policy versions, a SHA-256 of the signature image, and a SHA-256 of the whole canonicalised payload. At scan time the kiosk:
+
+1. Recomputes the payload hash and rejects the pass if it doesn't match (catches corruption or hand-edits).
+2. Compares the embedded `issuer` URL against its own origin and warns on mismatch (catches passes from a different deployment).
+3. Compares the embedded policy commit SHAs against the live policy commit SHAs and warns if the attendee should sign again.
+4. Looks the pass up in a per-session scan log and warns on a repeat scan.
+
+The pass is tamper-evident, not authenticated — staff are expected to verify ID at the door for anything significant.
+
+## Local development
+
+```sh
+npm install
+npm run dev      # local server on http://localhost:5173
+npm run build    # production bundle in dist/
+npm run preview  # serve the production bundle
+```
 
 ## Deployment
 
-This repository auto-deploys to GitHub Pages from `main`.
+This repository auto-deploys to GitHub Pages from `main` via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml). On every push to `main`:
 
-### Workflow
+1. `npm ci && npm run build` runs on a fresh runner.
+2. The contents of `dist/` (including `public/CNAME` so the custom domain persists) are uploaded as a Pages artifact.
+3. `actions/deploy-pages@v4` publishes the artifact.
 
-The `.github/workflows/deploy.yml` workflow runs on every push to `main` (and on every PR for build verification only). On a push to `main` it:
+Pull requests run the build only.
 
-1. Installs dependencies with `npm ci`.
-2. Builds with `npm run build` (Vite outputs to `dist/`).
-3. Uploads `dist/` as a Pages artifact (which includes `public/CNAME` so the custom domain is preserved).
-4. Deploys via `actions/deploy-pages@v4`.
+### One-time setup
 
-Pull requests run the build job only — no deploy.
+- **GitHub Pages:** Repo Settings → Pages → Source = `GitHub Actions`. The workflow uses `actions/configure-pages@v5` with `enablement: true`, so this should self-configure the first time it runs — but you may need to flip it manually if your org disallows that.
+- **DNS for `tos.undefined.charity`:** at the registrar, add either a `CNAME` pointing to `undefined-charity.github.io`, or A records pointing to GitHub Pages' apex IPs (`185.199.108.153`, `185.199.109.153`, `185.199.110.153`, `185.199.111.153`).
+- **HTTPS:** once DNS resolves, tick **Enforce HTTPS** in repo Settings → Pages. Let's Encrypt provisions a certificate automatically.
 
-### One-time GitHub Pages setup
+### n8n webhook (CORS)
 
-1. Repo **Settings → Pages → Build and deployment → Source = GitHub Actions**.
-2. (Optional but recommended) Repo **Settings → Pages → Custom domain = tos.undefined.charity** and tick **Enforce HTTPS** once DNS resolves.
+The browser POSTs to the n8n webhook from `tos.undefined.charity`, which is cross-origin. The webhook must respond to preflight `OPTIONS` requests and include `Access-Control-Allow-Origin: https://tos.undefined.charity` (or `*`) on its responses. In n8n, the simplest path is to open the Webhook node, add the **Allowed Origins (CORS)** option, and set it to the production URL.
 
-### One-time DNS setup at the registrar
+## Privacy
 
-Add either:
+- Each device stores a tiny, non-identifying summary of the last issued pass in `localStorage` (under the key `undefined-app.record.v3`) so it can warn the holder when policies change. There is no other client-side persistence.
+- The full signature image is sent to the configured n8n webhook at signing time and is **not** retained on the device.
+- There is no analytics, no third-party tracking, no central database of attendees on Undefined's side — only whatever the n8n workflow chooses to record.
 
-- A `CNAME` record on `tos.undefined.charity` pointing to `undefined-charity.github.io`, **or**
-- Four `A` records on `tos.undefined.charity` pointing to GitHub Pages' apex IPs (185.199.108.153, 185.199.109.153, 185.199.110.153, 185.199.111.153).
+## Project structure
 
-GitHub Pages will provision a Let's Encrypt cert automatically once DNS is verified.
-
-## Modes
-
-Two modes, switched via the small button group at the top-right of the header:
-
-- **Sign** (default) — read the live Terms and Privacy markdown documents, sign once, generate a QR, and either keep it personally or hit **Reset & sign again** for the next attendee on the same device.
-- **Check-in** — scan a QR, validate it against the current policy versions, warn on duplicate scans and on QRs issued by a different host.
-
-Configuration (policy URLs, submission endpoint, organization label, event label) lives in `src/config.js` and is intentionally git-only — there is no in-app settings page.
-
-## QR payload (`undefined-accept:v2:` prefix)
-
-Each QR carries a base64url-encoded JSON object with:
-
-- `schema`, `issuer` (the URL the app is hosted at), `organization`, `eventLabel`
-- `name`, `email`, `photoConsent`, `signedAt`
-- `terms` / `privacy`: `{ sha, lastUpdated }` using the GitHub blob SHA of each policy file
-- `signatureHash`: SHA-256 of the PNG data URL of the signature
-- `signature` (when it fits): compressed stroke data (Ramer-Douglas-Peucker-style distance simplification + deflate-raw + base64url) so kiosks can render the signature for ID comparison without contacting the server
-- `payloadHash`: SHA-256 of the canonicalised payload (everything except `payloadHash` itself), recomputed and verified at check-in to detect corruption or tampering
-
-If the signature stroke data won't fit in the QR budget (~2400 bytes), the QR omits `signature` and keeps only `signatureHash`. The full PNG always goes to the submission endpoint regardless.
-
-The QR is rendered at 720×720 (with a 2-module quiet zone) so a phone camera can capture it cleanly from a screen.
-
-## Endpoint POSTs
-
-When `endpointUrl` is set in `src/config.js`, the app POSTs JSON to it with an `action` field:
-
-- `action: 'agree'` — on signing. Body includes `qrPayload`, `acceptance`, `signatureDataUrl` (full PNG), and `issuer`.
-- `action: 'checkin'` — on each successful scan. Body includes `qrPayload`, `acceptance`, `scannedAt`, `issuerMatch`, `policyCurrent`, `scanCount`, `firstScannedAt`.
-
-All POSTs include `postedAt` and `scannerIssuer` (the origin the device is served from).
-
-## Kiosk check-in behaviour
-
-On scan, the kiosk:
-
-1. Verifies `payloadHash` against the recomputed canonical hash — rejects corrupted/tampered QRs.
-2. Compares `acceptance.issuer` against `window.location.origin` — warns if the QR was issued by a differently-hosted copy of the app.
-3. Compares `terms.sha` / `privacy.sha` against the freshly-fetched current SHAs — warns if the attendee needs to re-sign.
-4. Looks up `payloadHash` in an in-memory per-session scan log — warns if the same QR was scanned earlier.
-5. Renders the embedded signature (when present) for ID comparison.
-6. POSTs the result to the configured endpoint with `action: 'checkin'`.
+```
+src/
+  main.js       single-page render-on-state-change UI
+  style.css     all styles
+  config.js     site-wide configuration (PR-only)
+public/
+  CNAME         custom domain for GitHub Pages
+  manifest.webmanifest
+  service-worker.js
+  icon.svg
+.github/
+  workflows/
+    deploy.yml  build on PR, build + deploy on push to main
+  copilot-instructions.md
+```

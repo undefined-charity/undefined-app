@@ -1,7 +1,7 @@
 {
-  "name": "Undefined acceptance app",
-  "short_name": "Undefined QR",
-  "description": "Terms acceptance, signature capture, QR certificate issuance, and kiosk check-in for Undefined events.",
+  "name": "Undefined event consent",
+  "short_name": "Undefined",
+  "description": "Review and accept the Undefined event Terms & Conditions and Privacy Policy, then receive a check-in pass.",
   "display": "standalone",
   "start_url": "/",
   "scope": "/",
