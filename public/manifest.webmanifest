@@ -1,0 +1,18 @@
+{
+  "name": "Undefined acceptance app",
+  "short_name": "Undefined QR",
+  "description": "Terms acceptance, signature capture, QR certificate issuance, and kiosk check-in for Undefined events.",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/",
+  "background_color": "#f3f4f6",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
