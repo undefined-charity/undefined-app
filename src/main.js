@@ -3,10 +3,8 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import QRCode from 'qrcode'
 import QrScanner from 'qr-scanner'
-import qrScannerWorkerUrl from 'qr-scanner/qr-scanner-worker.min?url'
 import SignaturePad from 'signature_pad'
 
-QrScanner.WORKER_PATH = qrScannerWorkerUrl
 marked.use({ mangle: false, headerIds: false })
 
 const STORAGE_KEYS = {
@@ -19,9 +17,9 @@ const DEFAULT_SETTINGS = {
   endpointUrl: '',
   eventLabel: '',
   termsUrl:
-    'https://raw.githubusercontent.com/undefined-charity/undefined-site/main/src/content/terms/-index.md',
+    'https://api.github.com/repos/undefined-charity/undefined-site/contents/src/content/terms/-index.md?ref=main',
   privacyUrl:
-    'https://raw.githubusercontent.com/undefined-charity/undefined-site/main/src/content/privacy/-index.md',
+    'https://api.github.com/repos/undefined-charity/undefined-site/contents/src/content/privacy/-index.md?ref=main',
 }
 
 const CERTIFICATE_PREFIX = 'undefined-cert:v1:'
@@ -144,7 +142,18 @@ async function fetchPolicyDocument(url, fallbackTitle) {
     throw new Error(`Unable to load ${fallbackTitle} from ${url}.`)
   }
 
-  const markdown = await response.text()
+  const contentType = response.headers.get('content-type') || ''
+  let markdown
+  if (contentType.includes('application/json')) {
+    const payload = await response.json()
+    markdown =
+      typeof payload.content === 'string'
+        ? fromBase64ToUtf8(payload.content.replace(/\n/g, ''))
+        : JSON.stringify(payload)
+  } else {
+    markdown = await response.text()
+  }
+
   return parsePolicyDocument(markdown, fallbackTitle, url)
 }
 
@@ -878,6 +887,10 @@ function fromBase64Url(value) {
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/')
   const padding = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4))
   return decodeURIComponent(escape(atob(`${normalized}${padding}`)))
+}
+
+function fromBase64ToUtf8(value) {
+  return decodeURIComponent(escape(atob(value)))
 }
 
 async function hashText(value) {
