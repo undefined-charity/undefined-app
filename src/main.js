@@ -1136,9 +1136,34 @@ async function decodeAndStoreAcceptance(payload) {
     }
   }
 
+  let regeneratedQrDataUrl = ''
+  try {
+    regeneratedQrDataUrl = await createQrCodeDataUrl(payload)
+  } catch {
+    regeneratedQrDataUrl = ''
+  }
+
+  let regeneratedSignatureDataUrl = ''
+  if (signatureStrokes && acceptance.signature) {
+    try {
+      const offscreen = document.createElement('canvas')
+      renderSignatureToCanvas(
+        offscreen,
+        signatureStrokes,
+        acceptance.signature.width,
+        acceptance.signature.height,
+      )
+      regeneratedSignatureDataUrl = offscreen.toDataURL('image/png')
+    } catch {
+      regeneratedSignatureDataUrl = ''
+    }
+  }
+
   const endpointResult = await submitToEndpoint({
     action: 'checkin',
     qrPayload: payload,
+    qrDataUrl: regeneratedQrDataUrl,
+    signatureDataUrl: regeneratedSignatureDataUrl,
     acceptance,
     scannedAt: scannedAt.toISOString(),
     issuerMatch: issuerOk,
