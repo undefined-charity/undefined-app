@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Undefined acceptance app icon</title>
+  <desc id="desc">Rounded square with the letter U and a check mark.</desc>
+  <rect width="512" height="512" rx="112" fill="#111827" />
+  <path d="M150 146v126c0 64 42 110 106 110s106-46 106-110V146h-48v128c0 37-23 62-58 62s-58-25-58-62V146z" fill="#fff" />
+  <path d="M163 374l40 40 145-145" fill="none" stroke="#60a5fa" stroke-linecap="round" stroke-linejoin="round" stroke-width="36" />
+</svg>
