@@ -1,0 +1,199 @@
+{
+  "name": "Consent API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "dd47554e-384d-4b72-a4d1-22bf17275adc",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d314af09-fb1e-41f1-80e4-23aaba231c9e",
+      "name": "Webhook",
+      "webhookId": "dd47554e-384d-4b72-a4d1-22bf17275adc"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "agree"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "agree"
+            },
+            {
+              "conditions": {
+                "combinator": "and",
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.body.action }}",
+                    "operator": {
+                      "operation": "equals",
+                      "type": "string"
+                    },
+                    "rightValue": "checkin"
+                  }
+                ],
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                }
+              },
+              "renameOutput": true,
+              "outputKey": "checkin"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4a5d44f4-b106-46ec-b9e3-596f62250b28",
+      "name": "Route by action",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "Undefined Charity TOS<contact@undefined.charity>",
+        "toEmail": "={{ $json.body.acceptance.email }}",
+        "subject": "=Undefined Event Consent — {{ $json.body.acceptance.name }}, your check-in pass",
+        "html": "=<div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #1f2937; line-height: 1.55;\">\n  <h2 style=\"color: #111827; margin: 0 0 1rem;\">Thank you, {{ $json.body.acceptance.name }}.</h2>\n\n  <p>This email is your confirmation. The <strong>check-in pass</strong> below is what our team will scan when you arrive — keep this email on your phone, or save the image and bring it with you.</p>\n\n  <div style=\"background: {{ $json.body.acceptance.photoConsent === 'in' ? '#10b981' : '#dc2626' }}; color: #ffffff; padding: 1rem 1.25rem; border-radius: 0.75rem; margin: 1.25rem 0; text-align: center; font-weight: 600;\">\n    {{ $json.body.acceptance.photoConsent === 'in' ? '📷 You agreed to event photography' : '🚫 You opted out of event photography' }}\n    <div style=\"font-weight: 400; font-size: 0.95rem; margin-top: 0.25rem; opacity: 0.95;\">\n      {{ $json.body.acceptance.photoConsent === 'in' ? 'We may include you in photographs taken at the event.' : 'Our team will respect your preference and avoid photographing you.' }}\n    </div>\n  </div>\n\n  <div style=\"text-align: center; margin: 1.5rem 0;\">\n    <img src=\"cid:qr\" alt=\"Your check-in pass\" style=\"width: 100%; max-width: 360px; border: 1px solid #d1d5db; border-radius: 0.75rem; padding: 0.5rem; background: #ffffff;\" />\n  </div>\n\n  <h3 style=\"margin: 1.5rem 0 0.5rem; color: #111827; font-size: 1.05rem;\">What you accepted</h3>\n  <ul style=\"padding-left: 1.25rem; margin: 0;\">\n    <li>Terms &amp; Conditions — updated {{ $json.body.acceptance.terms.lastUpdated }}</li>\n    <li>Privacy Policy — updated {{ $json.body.acceptance.privacy.lastUpdated }}</li>\n    <li>Signed on {{ $json.body.acceptance.signedAt ? DateTime.fromISO($json.body.acceptance.signedAt).toLocaleString(DateTime.DATETIME_MED) : '' }}</li>\n  </ul>\n\n  <h3 style=\"margin: 1.5rem 0 0.5rem; color: #111827; font-size: 1.05rem;\">Your signature</h3>\n  <div style=\"text-align: center;\">\n    <img src=\"cid:signature\" alt=\"Your signature\" style=\"max-width: 360px; width: 100%; background: #ffffff; border: 1px solid #d1d5db; border-radius: 0.5rem; padding: 0.5rem;\" />\n  </div>\n\n  <p style=\"margin-top: 1.5rem;\">If anything looks wrong — your name, email, or photography preference — please reply to this email, or sign in again at <a href=\"https://tos.undefined.charity\" style=\"color: #2563eb;\">tos.undefined.charity</a>.</p>\n\n  <p style=\"margin-top: 2rem;\">With thanks,<br/>The Undefined team</p>\n\n  <hr style=\"border: none; border-top: 1px solid #e5e7eb; margin: 2rem 0 1rem;\"/>\n  <p style=\"color: #6b7280; font-size: 0.8rem; margin: 0;\">\n    Undefined Charity · <a href=\"mailto:contact@undefined.charity\" style=\"color: #6b7280;\">contact@undefined.charity</a>\n  </p>\n</div>",
+        "options": {
+          "appendAttribution": false,
+          "attachments": "qr,signature",
+          "bccEmail": "consent-records@undefined.charity",
+          "replyTo": "contact@undefined.charity"
+        }
+      },
+      "id": "64acc52b-d5bf-46f5-9515-460e9ad70d35",
+      "name": "Send confirmation email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        -160
+      ],
+      "webhookId": "e8085c0f-ec65-48f3-a564-e8cffe63b4d4"
+    },
+    {
+      "parameters": {
+        "fromEmail": "Undefined <contact@undefined.charity>",
+        "toEmail": "={{ $json.body.acceptance.email }}",
+        "subject": "=You’re checked in, {{ $json.body.acceptance.name }} — welcome to the Undefined event",
+        "html": "=<div style=\"font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #1f2937; line-height: 1.55;\">\n  <h2 style=\"color: #111827; margin: 0 0 1rem;\">Welcome, {{ $json.body.acceptance.name }}.</h2>\n\n  <p>You’re checked in. Thank you for joining us at the Undefined event — we’re glad to have you here.</p>\n\n  {{ $json.body.acceptance.photoConsent === 'out' ? '<p style=\"margin: 1rem 0 0; padding: 0.85rem 1.1rem; background: #f3f4f6; border-left: 4px solid #2563eb; border-radius: 0.4rem; font-weight: 600;\">Please see a member of staff to collect your wristband.</p>' : '' }}\n\n  <div style=\"background: {{ $json.body.acceptance.photoConsent === 'in' ? '#10b981' : '#dc2626' }}; color: #ffffff; padding: 1rem 1.25rem; border-radius: 0.75rem; margin: 1.25rem 0; text-align: center; font-weight: 600;\">\n    {{ $json.body.acceptance.photoConsent === 'in' ? '📷 You agreed to event photography' : '🚫 You opted out of event photography' }}\n    <div style=\"font-weight: 400; font-size: 0.95rem; margin-top: 0.25rem; opacity: 0.95;\">\n      {{ $json.body.acceptance.photoConsent === 'in' ? 'Our team may include you in photographs taken at the event.' : 'Our team has been notified of your preference and will not photograph you.' }}\n    </div>\n  </div>\n\n  <h3 style=\"margin: 1.5rem 0 0.5rem; color: #111827; font-size: 1.05rem;\">Your check-in details</h3>\n  <ul style=\"padding-left: 1.25rem; margin: 0;\">\n    <li>Checked in at {{ $json.body.scannedAt ? DateTime.fromISO($json.body.scannedAt).toLocaleString(DateTime.DATETIME_MED) : 'now' }}</li>\n    <li>Originally signed on {{ $json.body.acceptance.signedAt ? DateTime.fromISO($json.body.acceptance.signedAt).toLocaleString(DateTime.DATETIME_MED) : '' }}</li>\n    <li>Terms &amp; Conditions — updated {{ $json.body.acceptance.terms.lastUpdated }}</li>\n    <li>Privacy Policy — updated {{ $json.body.acceptance.privacy.lastUpdated }}</li>\n  </ul>\n\n  <div style=\"text-align: center; margin: 1.5rem 0;\">\n    <img src=\"cid:qr\" alt=\"Your check-in pass\" style=\"width: 100%; max-width: 280px; border: 1px solid #d1d5db; border-radius: 0.75rem; padding: 0.5rem; background: #ffffff;\" />\n  </div>\n\n  {{ $json.body.policyCurrent === false ? '<p style=\"margin-top: 1.25rem; padding: 0.75rem 1rem; background: #fef3c7; color: #92400e; border-radius: 0.5rem;\"><strong>Note:</strong> our policies have been updated since you last signed. Please take a moment to sign again at <a href=\"https://tos.undefined.charity\" style=\"color: #92400e;\">tos.undefined.charity</a> at your convenience.</p>' : '' }}\n\n  <p style=\"margin-top: 1.5rem;\">If you didn’t just check in, please let a member of staff know so we can sort it out. If you’d like to change your photography preference at any time, sign in again at <a href=\"https://tos.undefined.charity\" style=\"color: #2563eb;\">tos.undefined.charity</a>.</p>\n\n  <p style=\"margin-top: 2rem;\">Enjoy the event,<br/>The Undefined team</p>\n\n  <hr style=\"border: none; border-top: 1px solid #e5e7eb; margin: 2rem 0 1rem;\"/>\n  <p style=\"color: #6b7280; font-size: 0.8rem; margin: 0;\">\n    Undefined Charity · <a href=\"mailto:contact@undefined.charity\" style=\"color: #6b7280;\">contact@undefined.charity</a>\n  </p>\n</div>",
+        "options": {
+          "appendAttribution": false,
+          "attachments": "qr,signature",
+          "bccEmail": "consent-records@undefined.charity",
+          "replyTo": "contact@undefined.charity"
+        },
+        "emailFormat": "html"
+      },
+      "id": "0031bcae-f635-4017-a105-8971fe40588f",
+      "name": "Send check-in email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        720,
+        160
+      ],
+      "webhookId": "7a96a8f8-8ea3-4af0-80a1-0e725670ae04"
+    },
+    {
+      "parameters": {
+        "jsCode": "function dataUrlToBinary(dataUrl, fileName) {\n  if (!dataUrl || typeof dataUrl !== 'string') return null;\n  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);\n  if (!match) return null;\n  return {\n    data: match[2],\n    mimeType: match[1],\n    fileName,\n    fileExtension: (match[1].split('/')[1] || 'bin'),\n  };\n}\n\nreturn items.map((item) => {\n  const body = (item.json && item.json.body) || item.json || {};\n  const binary = {};\n  const qr = dataUrlToBinary(body.qrDataUrl, 'undefined-pass.png');\n  const sig = dataUrlToBinary(body.signatureDataUrl, 'undefined-signature.png');\n  if (qr) binary.qr = qr;\n  if (sig) binary.signature = sig;\n  return { json: item.json, binary };\n});\n"
+      },
+      "id": "55ea6d09-ea1b-4d28-8c6a-fc7880490bfa",
+      "name": "Build email attachments",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Route by action": {
+      "main": [
+        [
+          {
+            "node": "Send confirmation email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send check-in email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build email attachments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build email attachments": {
+      "main": [
+        [
+          {
+            "node": "Route by action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "instanceId": "exported-for-backup",
+    "builderVariant": "mcp"
+  }
+}
