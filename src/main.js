@@ -9,7 +9,7 @@ import { APP_CONFIG } from './config.js'
 marked.use({ mangle: false, headerIds: false })
 
 const STORAGE_KEYS = {
-  personalRecord: 'undefined-app.personal-record.v2',
+  record: 'undefined-app.record.v3',
 }
 
 const ACCEPTANCE_PREFIX = 'undefined-accept:v2:'
@@ -19,22 +19,20 @@ const PHOTO_CONSENT_LABELS = {
   out: 'Opted out of event photography',
 }
 
-const MODES = ['personal', 'kiosk-sign', 'kiosk-checkin']
+const MODES = ['sign', 'checkin']
 const MODE_LABELS = {
-  personal: 'Personal',
-  'kiosk-sign': 'Kiosk sign',
-  'kiosk-checkin': 'Kiosk check-in',
+  sign: 'Sign',
+  checkin: 'Check-in',
 }
 
 const kioskScanLog = new Map()
 
 const state = {
-  mode: 'personal',
+  mode: 'sign',
   loadingDocs: true,
   docsError: '',
   docs: null,
-  personalRecord: loadJson(STORAGE_KEYS.personalRecord, null),
-  kioskRecord: null,
+  record: loadJson(STORAGE_KEYS.record, null),
   checkinResult: null,
   message: '',
   shareSupported:
@@ -42,14 +40,10 @@ const state = {
     typeof navigator.share === 'function' &&
     typeof navigator.canShare === 'function',
   drafts: {
-    personal: defaultFormDraft(),
-    kiosk: defaultFormDraft(),
+    sign: defaultFormDraft(),
     pastedPayload: '',
   },
-  reads: {
-    personal: { terms: false, privacy: false },
-    kiosk: { terms: false, privacy: false },
-  },
+  reads: { terms: false, privacy: false },
 }
 
 const app = document.querySelector('#app')
@@ -254,11 +248,10 @@ function buildDownloadFilename(summary) {
 }
 
 function render() {
-  if (state.mode !== 'kiosk-checkin') {
+  if (state.mode !== 'checkin') {
     stopScanner()
   }
 
-  const activeRecord = state.mode === 'personal' ? state.personalRecord : state.kioskRecord
   const policyStateMarkup = renderPolicyState()
   const bannerMarkup = renderBanner()
   const messageMarkup = state.message
@@ -288,7 +281,7 @@ function render() {
         </section>
 
         <aside class="secondary-column">
-          ${renderRecordCard(activeRecord)}
+          ${renderRecordCard(state.record)}
         </aside>
       </main>
     </div>
@@ -298,7 +291,7 @@ function render() {
   initializeSignaturePad()
   attachPolicyReadGates()
   attachSignatureCanvases()
-  if (state.mode === 'kiosk-checkin') {
+  if (state.mode === 'checkin') {
     startScanner()
   }
 }
@@ -326,11 +319,11 @@ function renderPolicyState() {
 }
 
 function renderBanner() {
-  if (!state.personalRecord || state.loadingDocs || state.docsError) {
+  if (!state.record || state.loadingDocs || state.docsError) {
     return ''
   }
 
-  if (isRecordCurrent(state.personalRecord)) {
+  if (isRecordCurrent(state.record)) {
     return '<section class="banner banner--success">Your saved acceptance matches the current terms and privacy policy.</section>'
   }
 
@@ -351,23 +344,17 @@ function renderModePanel() {
     `
   }
 
-  if (state.mode === 'kiosk-checkin') {
+  if (state.mode === 'checkin') {
     return renderCheckinPanel()
   }
 
-  return renderSigningPanel(state.mode === 'personal' ? 'personal' : 'kiosk')
+  return renderSigningPanel()
 }
 
-function renderSigningPanel(kind) {
-  const draft = state.drafts[kind]
-  const reads = state.reads[kind]
-  const record = kind === 'personal' ? state.personalRecord : state.kioskRecord
-  const heading =
-    kind === 'personal'
-      ? 'Read both policies through, then sign and keep the QR on your phone.'
-      : 'Hand the device to the next attendee. They must read both policies before they can accept.'
-  const actionLabel = kind === 'personal' ? 'Accept & generate my QR' : 'Generate kiosk QR'
-  const formId = `${kind}-form`
+function renderSigningPanel() {
+  const draft = state.drafts.sign
+  const reads = state.reads
+  const record = state.record
   const bothRead = reads.terms && reads.privacy
   const disabledAttr = bothRead ? '' : 'disabled'
   const lockedNote = bothRead
@@ -377,14 +364,14 @@ function renderSigningPanel(kind) {
   return `
     <div class="stack">
       <div>
-        <h2>${kind === 'personal' ? 'Personal acceptance' : 'Kiosk acceptance'}</h2>
-        <p>${heading}</p>
+        <h2>Sign acceptance</h2>
+        <p>Read both policies through, then sign. Personal use? Keep the QR on your phone. Kiosk use? Hit Reset after each attendee.</p>
       </div>
 
-      ${renderPolicyReader(kind, 'terms', state.docs.terms, reads.terms)}
-      ${renderPolicyReader(kind, 'privacy', state.docs.privacy, reads.privacy)}
+      ${renderPolicyReader('terms', state.docs.terms, reads.terms)}
+      ${renderPolicyReader('privacy', state.docs.privacy, reads.privacy)}
 
-      <form id="${formId}" data-form-kind="${kind}" class="stack form-grid acceptance-form ${bothRead ? '' : 'is-locked'}">
+      <form id="sign-form" class="stack form-grid acceptance-form ${bothRead ? '' : 'is-locked'}">
         <h3>Your acceptance</h3>
         ${lockedNote}
 
@@ -417,20 +404,20 @@ function renderSigningPanel(kind) {
         <div class="signature-block">
           <div class="signature-header">
             <span>Signature</span>
-            <button type="button" class="secondary-button" data-action="clear-signature" data-signature-kind="${kind}" ${disabledAttr}>Clear</button>
+            <button type="button" class="secondary-button" data-action="clear-signature" ${disabledAttr}>Clear</button>
           </div>
-          <canvas id="${kind}-signature" class="signature-canvas" aria-label="Signature pad"></canvas>
+          <canvas id="sign-signature" class="signature-canvas" aria-label="Signature pad"></canvas>
         </div>
 
-        <button class="primary-button" type="submit" ${disabledAttr}>${actionLabel}</button>
+        <button class="primary-button" type="submit" ${disabledAttr}>Accept &amp; generate QR</button>
       </form>
 
-      ${record ? renderSubmissionCard(record, kind) : ''}
+      ${record ? renderSubmissionCard(record) : ''}
     </div>
   `
 }
 
-function renderPolicyReader(kind, docKey, doc, hasRead) {
+function renderPolicyReader(docKey, doc, hasRead) {
   return `
     <section class="policy-reader ${hasRead ? 'is-read' : ''}">
       <header class="policy-reader__header">
@@ -440,14 +427,14 @@ function renderPolicyReader(kind, docKey, doc, hasRead) {
         </div>
         <span class="policy-reader__badge">${hasRead ? '✓ Read' : 'Scroll to end to confirm'}</span>
       </header>
-      <div class="policy-reader__body" data-policy-body data-policy-kind="${kind}" data-policy-doc="${docKey}" tabindex="0">
+      <div class="policy-reader__body" data-policy-body data-policy-doc="${docKey}" tabindex="0">
         ${doc.html}
       </div>
     </section>
   `
 }
 
-function renderSubmissionCard(record, kind) {
+function renderSubmissionCard(record) {
   const summary = getRecordSummary(record)
   const current = isRecordCurrent(record)
   const endpointStatus = record.endpointResult?.skipped
@@ -468,6 +455,9 @@ function renderSubmissionCard(record, kind) {
           <li>${current ? 'Matches current terms' : 'Needs re-signing before check-in'}</li>
           <li>The app stores only a local status summary after reload. Keep the downloaded QR image on the device for presentation.</li>
         </ul>
+        <div class="button-row">
+          <button class="secondary-button" type="button" data-action="reset-sign">Reset &amp; sign again</button>
+        </div>
       </section>
     `
   }
@@ -475,7 +465,7 @@ function renderSubmissionCard(record, kind) {
   return `
     <section class="result-card ${current ? 'result-card--success' : 'result-card--warning'}">
       <div>
-        <h3>${kind === 'personal' ? 'Saved acceptance' : 'Latest kiosk acceptance'}</h3>
+        <h3>Acceptance QR</h3>
         <p>${escapeHtml(summary.name)} signed on ${escapeHtml(formatSignedAt(summary.signedAt))}.</p>
       </div>
       <ul class="result-list">
@@ -486,8 +476,8 @@ function renderSubmissionCard(record, kind) {
       <img class="qr-preview" src="${record.qrDataUrl}" alt="QR for ${escapeHtml(summary.name)}" />
       <div class="button-row">
         <a class="secondary-button" href="${record.qrDataUrl}" download="${escapeHtml(buildDownloadFilename(summary))}">Download QR</a>
-        ${kind === 'personal' && state.shareSupported ? '<button class="secondary-button" type="button" data-action="share-qr">Share QR</button>' : ''}
-        ${kind === 'kiosk' ? '<button class="primary-button" type="button" data-action="kiosk-done">Done / reset kiosk</button>' : ''}
+        ${state.shareSupported ? '<button class="secondary-button" type="button" data-action="share-qr">Share QR</button>' : ''}
+        <button class="primary-button" type="button" data-action="reset-sign">Reset &amp; sign again</button>
       </div>
       <details>
         <summary>Acceptance payload</summary>
@@ -633,19 +623,17 @@ function bindUi() {
 
   document.querySelectorAll('[data-action="clear-signature"]').forEach((button) => {
     button.addEventListener('click', () => {
-      if (activeSignatureKey === button.dataset.signatureKind && activeSignaturePad) {
-        activeSignaturePad.clear()
-      }
+      activeSignaturePad?.clear()
     })
   })
 
   document.querySelector('[data-action="share-qr"]')?.addEventListener('click', async () => {
-    if (!state.personalRecord?.qrDataUrl) {
+    if (!state.record?.qrDataUrl) {
       return
     }
 
     try {
-      const file = await dataUrlToFile(state.personalRecord.qrDataUrl, 'undefined-acceptance.png')
+      const file = await dataUrlToFile(state.record.qrDataUrl, 'undefined-acceptance.png')
       if (navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], title: 'Undefined acceptance QR' })
       }
@@ -655,10 +643,12 @@ function bindUi() {
     }
   })
 
-  document.querySelector('[data-action="kiosk-done"]')?.addEventListener('click', () => {
-    state.kioskRecord = null
-    state.drafts.kiosk = defaultFormDraft()
-    state.reads.kiosk = { terms: false, privacy: false }
+  document.querySelector('[data-action="reset-sign"]')?.addEventListener('click', () => {
+    state.record = null
+    state.drafts.sign = defaultFormDraft()
+    state.reads = { terms: false, privacy: false }
+    state.message = ''
+    window.localStorage.removeItem(STORAGE_KEYS.record)
     render()
   })
 
@@ -690,36 +680,34 @@ function bindUi() {
     }
   })
 
-  document.querySelectorAll('form[data-form-kind]').forEach((form) => {
-    form.addEventListener('submit', async (event) => {
+  const signForm = document.querySelector('#sign-form')
+  if (signForm) {
+    signForm.addEventListener('submit', async (event) => {
       event.preventDefault()
-      await submitSigningForm(form.dataset.formKind)
+      await submitSigningForm()
     })
-
-    form.querySelectorAll('input').forEach((input) => {
-      input.addEventListener('input', () => syncFormDraft(form.dataset.formKind, input))
-      input.addEventListener('change', () => syncFormDraft(form.dataset.formKind, input))
+    signForm.querySelectorAll('input').forEach((input) => {
+      input.addEventListener('input', () => syncFormDraft(input))
+      input.addEventListener('change', () => syncFormDraft(input))
     })
-  })
+  }
 }
 
 function attachPolicyReadGates() {
   document.querySelectorAll('[data-policy-body]').forEach((node) => {
-    const kind = node.dataset.policyKind
     const docKey = node.dataset.policyDoc
-    if (!kind || !docKey) {
+    if (!docKey) {
       return
     }
 
     const markRead = () => {
-      if (state.reads[kind]?.[docKey]) {
+      if (state.reads[docKey]) {
         return
       }
-      state.reads[kind][docKey] = true
+      state.reads[docKey] = true
       render()
     }
 
-    // Auto-mark short docs that fit without scrolling.
     requestAnimationFrame(() => {
       if (node.scrollHeight - node.clientHeight <= 4) {
         markRead()
@@ -735,31 +723,32 @@ function attachPolicyReadGates() {
   })
 }
 
-function syncFormDraft(kind, input) {
+function syncFormDraft(input) {
+  const draft = state.drafts.sign
   if (input.type === 'checkbox') {
-    state.drafts[kind][input.name] = input.checked
+    draft[input.name] = input.checked
     return
   }
 
   if (input.type === 'radio') {
     if (input.checked) {
-      state.drafts[kind][input.name] = input.value
+      draft[input.name] = input.value
     }
     return
   }
 
-  state.drafts[kind][input.name] = input.value
+  draft[input.name] = input.value
 }
 
 function initializeSignaturePad() {
-  const canvas = document.querySelector(`#${state.mode === 'personal' ? 'personal' : state.mode === 'kiosk-sign' ? 'kiosk' : 'none'}-signature`)
+  const canvas = document.querySelector('#sign-signature')
   if (!canvas) {
     activeSignaturePad = null
     activeSignatureKey = null
     return
   }
 
-  activeSignatureKey = state.mode === 'personal' ? 'personal' : 'kiosk'
+  activeSignatureKey = 'sign'
   resizeSignatureCanvas(canvas)
   activeSignaturePad = new SignaturePad(canvas, {
     penColor: '#111827',
@@ -778,15 +767,14 @@ function resizeSignatureCanvas(canvas) {
   canvas.getContext('2d').scale(ratio, ratio)
 }
 
-async function submitSigningForm(kind) {
-  const reads = state.reads[kind]
-  if (!reads?.terms || !reads?.privacy) {
+async function submitSigningForm() {
+  if (!state.reads.terms || !state.reads.privacy) {
     state.message = 'Please read both policies through to the end before accepting.'
     render()
     return
   }
 
-  const form = document.querySelector(`#${kind}-form`)
+  const form = document.querySelector('#sign-form')
   if (!form?.reportValidity()) {
     return
   }
@@ -830,7 +818,6 @@ async function submitSigningForm(kind) {
   const qrDataUrl = await createQrCodeDataUrl(payload)
   const endpointResult = await submitToEndpoint({
     action: 'agree',
-    mode: kind,
     qrPayload: payload,
     acceptance,
     signatureDataUrl: signature.signatureDataUrl,
@@ -846,27 +833,23 @@ async function submitSigningForm(kind) {
     signatureDataUrl: signature.signatureDataUrl,
   }
   state.message = omittedSignature
-    ? 'Signature is too large to fit in the QR; only the signature hash was embedded. The full image was POSTed to the configured endpoint.'
+    ? 'Signature was too large to fit in the QR; only the signature hash was embedded. The full image was POSTed to the configured endpoint.'
     : ''
-  if (kind === 'personal') {
-    state.personalRecord = record
-    saveJson(
-      STORAGE_KEYS.personalRecord,
-      createStoredPersonalRecord({
-        name: acceptance.name,
-        signedAt,
-        photoConsent,
-        payloadHash: acceptance.payloadHash,
-        termsSha: acceptance.terms.sha,
-        privacySha: acceptance.privacy.sha,
-      }),
-    )
-  } else {
-    state.kioskRecord = record
-  }
+  state.record = record
+  saveJson(
+    STORAGE_KEYS.record,
+    createStoredRecord({
+      name: acceptance.name,
+      signedAt,
+      photoConsent,
+      payloadHash: acceptance.payloadHash,
+      termsSha: acceptance.terms.sha,
+      privacySha: acceptance.privacy.sha,
+    }),
+  )
 
-  state.drafts[kind] = defaultFormDraft()
-  state.reads[kind] = { terms: false, privacy: false }
+  state.drafts.sign = defaultFormDraft()
+  state.reads = { terms: false, privacy: false }
   render()
 }
 
@@ -876,9 +859,9 @@ async function extractSignature() {
   const bounds = canvas.getBoundingClientRect()
   const width = Math.max(1, Math.round(bounds.width))
   const height = Math.max(1, Math.round(bounds.height))
-  const strokes = data.map((stroke) =>
+  const strokes = data.map((stroke) => simplifyStroke(
     stroke.points.map((p) => [Math.round(p.x), Math.round(p.y)]),
-  )
+  ))
   const signatureDataUrl = activeSignaturePad.toDataURL('image/png')
   const signatureHash = await hashText(signatureDataUrl)
   const encoded = await encodeStrokes(strokes)
@@ -887,6 +870,24 @@ async function extractSignature() {
     signatureHash,
     qrSignature: encoded ? { ...encoded, width, height, format: 'strokes-v1' } : null,
   }
+}
+
+function simplifyStroke(points, minDistance = 1.5) {
+  if (points.length <= 2) {
+    return points
+  }
+  const minDistSq = minDistance * minDistance
+  const out = [points[0]]
+  for (let i = 1; i < points.length - 1; i++) {
+    const last = out[out.length - 1]
+    const dx = points[i][0] - last[0]
+    const dy = points[i][1] - last[1]
+    if (dx * dx + dy * dy >= minDistSq) {
+      out.push(points[i])
+    }
+  }
+  out.push(points[points.length - 1])
+  return out
 }
 
 async function finalizeAcceptance(base, qrSignature) {
@@ -950,8 +951,8 @@ function decodeAcceptancePayload(payload) {
 async function createQrCodeDataUrl(payload) {
   return QRCode.toDataURL(payload, {
     errorCorrectionLevel: 'M',
-    margin: 1,
-    width: 360,
+    margin: 2,
+    width: 720,
     color: {
       dark: '#111827',
       light: '#ffffff',
@@ -1134,7 +1135,7 @@ async function decodeAndStoreAcceptance(payload) {
   render()
 }
 
-function createStoredPersonalRecord({ name, signedAt, photoConsent, termsSha, privacySha, payloadHash }) {
+function createStoredRecord({ name, signedAt, photoConsent, termsSha, privacySha, payloadHash }) {
   return {
     summary: {
       name,

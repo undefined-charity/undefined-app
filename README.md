@@ -1,6 +1,6 @@
 # undefined-app
 
-A small installable HTML5 app for Undefined event terms acceptance, photography consent capture, QR issuance, and kiosk check-in.
+A small installable HTML5 app for Undefined event terms acceptance, photography consent capture, QR issuance, and check-in.
 
 ## Commands
 
@@ -9,14 +9,16 @@ A small installable HTML5 app for Undefined event terms acceptance, photography 
 - `npm run build`
 - `npm run preview`
 
-## Notes
+## Modes
 
-- The app loads the live Terms and Privacy markdown documents from the Undefined site GitHub repository API on every launch.
-- Personal and kiosk acceptance flows show both policies in scrollable readers; the acceptance form unlocks only once each policy has been scrolled to the bottom.
-- Mode switching uses a small button group at the top-right of the header and defaults to Personal mode.
-- App configuration (policy URLs, submission endpoint, organization label, event label) lives in `src/config.js` and is only changeable via a pull request — there is no in-app settings page.
+Two modes, switched via the small button group at the top-right of the header:
 
-### QR payload (`undefined-accept:v2:` prefix)
+- **Sign** (default) — read the live Terms and Privacy markdown documents, sign once, generate a QR, and either keep it personally or hit **Reset & sign again** for the next attendee on the same device.
+- **Check-in** — scan a QR, validate it against the current policy versions, warn on duplicate scans and on QRs issued by a different host.
+
+Configuration (policy URLs, submission endpoint, organization label, event label) lives in `src/config.js` and is intentionally git-only — there is no in-app settings page.
+
+## QR payload (`undefined-accept:v2:` prefix)
 
 Each QR carries a base64url-encoded JSON object with:
 
@@ -24,21 +26,23 @@ Each QR carries a base64url-encoded JSON object with:
 - `name`, `email`, `photoConsent`, `signedAt`
 - `terms` / `privacy`: `{ sha, lastUpdated }` using the GitHub blob SHA of each policy file
 - `signatureHash`: SHA-256 of the PNG data URL of the signature
-- `signature` (when it fits): compressed stroke data so kiosks can render the signature for ID comparison without contacting the server
+- `signature` (when it fits): compressed stroke data (Ramer-Douglas-Peucker-style distance simplification + deflate-raw + base64url) so kiosks can render the signature for ID comparison without contacting the server
 - `payloadHash`: SHA-256 of the canonicalised payload (everything except `payloadHash` itself), recomputed and verified at check-in to detect corruption or tampering
 
-If the signature stroke data won't fit in the QR budget, the QR omits `signature` and keeps only `signatureHash`. The full PNG always goes to the submission endpoint regardless.
+If the signature stroke data won't fit in the QR budget (~2400 bytes), the QR omits `signature` and keeps only `signatureHash`. The full PNG always goes to the submission endpoint regardless.
 
-### Endpoint POSTs
+The QR is rendered at 720×720 (with a 2-module quiet zone) so a phone camera can capture it cleanly from a screen.
+
+## Endpoint POSTs
 
 When `endpointUrl` is set in `src/config.js`, the app POSTs JSON to it with an `action` field:
 
 - `action: 'agree'` — on signing. Body includes `qrPayload`, `acceptance`, `signatureDataUrl` (full PNG), and `issuer`.
 - `action: 'checkin'` — on each successful scan. Body includes `qrPayload`, `acceptance`, `scannedAt`, `issuerMatch`, `policyCurrent`, `scanCount`, `firstScannedAt`.
 
-All POSTs include `postedAt` and `scannerIssuer` (the origin the kiosk is served from).
+All POSTs include `postedAt` and `scannerIssuer` (the origin the device is served from).
 
-### Kiosk check-in behaviour
+## Kiosk check-in behaviour
 
 On scan, the kiosk:
 
