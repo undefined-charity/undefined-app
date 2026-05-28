@@ -12,6 +12,12 @@ const STORAGE_KEYS = {
   settings: 'undefined-app.settings',
 }
 
+function buildDownloadFilename(summary) {
+  const slug = summary.name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'certificate'
+  const date = summary.signedAt ? summary.signedAt.slice(0, 10) : 'undated'
+  return `undefined-certificate-${slug}-${date}.png`
+}
+
 const DEFAULT_SETTINGS = {
   organizationName: 'Undefined',
   endpointUrl: '',
@@ -205,7 +211,7 @@ function isPolicyVersionCurrent(policyVersion) {
   return policyVersion.digest === currentPolicyVersion()?.digest
 }
 
-function isCertificateCurrent(certificate) {
+function isCertificatePolicyVersionCurrent(certificate) {
   return isPolicyVersionCurrent(certificate?.policyVersion)
 }
 
@@ -441,7 +447,7 @@ function renderSubmissionCard(record, kind) {
       </ul>
       <img class="qr-preview" src="${record.qrDataUrl}" alt="QR certificate for ${escapeHtml(summary.name)}" />
       <div class="button-row">
-        <a class="secondary-button" href="${record.qrDataUrl}" download="undefined-certificate-${escapeHtml(summary.name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-'))}.png">Download QR</a>
+        <a class="secondary-button" href="${record.qrDataUrl}" download="${escapeHtml(buildDownloadFilename(summary))}">Download QR</a>
         ${kind === 'personal' && state.shareSupported ? '<button class="secondary-button" type="button" data-action="share-qr">Share QR</button>' : ''}
         ${kind === 'kiosk' ? '<button class="primary-button" type="button" data-action="kiosk-done">Done / reset kiosk</button>' : ''}
       </div>
@@ -745,12 +751,14 @@ async function submitSigningForm(kind) {
   }
 
   const formData = new FormData(form)
+  const signedAt = new Date().toISOString()
   const photoConsent = formData.get('photoConsent').toString()
   const signatureDataUrl = activeSignaturePad.toDataURL('image/png')
   const certificate = await buildCertificate({
     name: formData.get('name').toString().trim(),
     email: formData.get('email').toString().trim(),
     photoConsent,
+    signedAt,
     signatureDataUrl,
   })
   const payload = encodeCertificatePayload(certificate)
@@ -764,7 +772,7 @@ async function submitSigningForm(kind) {
     saveJson(
       STORAGE_KEYS.personalRecord,
       createStoredPersonalRecord({
-        signedAt: certificate.signedAt,
+        signedAt,
         photoConsent,
         policyVersion: currentPolicyVersion(),
       }),
@@ -777,14 +785,14 @@ async function submitSigningForm(kind) {
   render()
 }
 
-async function buildCertificate({ name, email, photoConsent, signatureDataUrl }) {
+async function buildCertificate({ name, email, photoConsent, signedAt, signatureDataUrl }) {
   const signatureHash = await hashText(signatureDataUrl)
   return {
     schema: 'undefined-charity/acceptance-certificate@1',
     organization: state.settings.organizationName || DEFAULT_SETTINGS.organizationName,
     eventLabel: state.settings.eventLabel || undefined,
     acceptance: 'accepted',
-    signedAt: new Date().toISOString(),
+    signedAt,
     attendee: { name, email },
     photoConsent,
     signatureHash,
@@ -912,7 +920,7 @@ function decodeAndStoreCertificate(payload) {
     state.checkinResult = {
       valid: true,
       certificate,
-      current: isCertificateCurrent(certificate),
+      current: isCertificatePolicyVersionCurrent(certificate),
     }
   } catch {
     state.checkinResult = { valid: false, message: 'That QR payload is not a valid Undefined certificate.' }
