@@ -70,7 +70,7 @@ If you change the pass format, bump the prefix (`undefined-accept:v2:` → `unde
 
 ## n8n webhook
 
-POSTed at signing (`action: "agree"`) and on every successful check-in scan (`action: "checkin"`). Both include `qrPayload`, `acceptance`, `postedAt`, `scannerIssuer`. `agree` additionally includes `signatureDataUrl` (the full PNG, never persisted locally). `checkin` additionally includes `scannedAt`, `issuerMatch`, `policyCurrent`, `scanCount`, `firstScannedAt`.
+POSTed at signing (`action: "agree"`) and on every successful check-in scan (`action: "checkin"`). Both include `qrPayload`, `acceptance`, `postedAt`, `scannerIssuer`. `agree` additionally includes `qrDataUrl` (the rendered pass PNG, used by n8n to attach to the confirmation email) and `signatureDataUrl` (the full signature PNG, never persisted locally). `checkin` additionally includes `scannedAt`, `issuerMatch`, `policyCurrent`, `scanCount`, `firstScannedAt`.
 
 The endpoint must send `Access-Control-Allow-Origin` headers for cross-origin POSTs from `https://tos.undefined.charity` to succeed. n8n's Webhook node has an "Allowed Origins (CORS)" option for this.
 

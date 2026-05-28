@@ -837,6 +837,7 @@ async function submitSigningForm() {
   const endpointResult = await submitToEndpoint({
     action: 'agree',
     qrPayload: payload,
+    qrDataUrl,
     acceptance,
     signatureDataUrl: signature.signatureDataUrl,
     issuer: acceptance.issuer,
