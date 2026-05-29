@@ -10,7 +10,10 @@ marked.use({ mangle: false, headerIds: false })
 
 const STORAGE_KEYS = {
   record: 'undefined-app.record.v3',
+  mode: 'undefined-app.mode',
 }
+
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 
 const ACCEPTANCE_PREFIX = 'undefined-accept:v2:'
 const PAYLOAD_BUDGET_BYTES = 2400
@@ -28,8 +31,10 @@ const MODE_LABELS = {
 const kioskScanLog = new Map()
 
 const state = {
-  mode: 'sign',
+  mode: loadJson(STORAGE_KEYS.mode, 'sign'),
+  showSettings: false,
   loadingDocs: true,
+  docsLoadedAt: null,
   docsError: '',
   docs: null,
   record: loadJson(STORAGE_KEYS.record, null),
@@ -107,6 +112,7 @@ async function loadPolicyDocuments() {
     ])
 
     state.docs = { terms, privacy }
+    state.docsLoadedAt = new Date().toISOString()
   } catch (error) {
     state.docsError = error instanceof Error ? error.message : 'Couldn\u2019t load the latest policies.'
   } finally {
@@ -248,7 +254,7 @@ function buildDownloadFilename(summary) {
 }
 
 function render() {
-  const shouldRunScanner = state.mode === 'checkin' && !state.checkinResult
+  const shouldRunScanner = state.mode === 'checkin' && !state.checkinResult && !state.showSettings
   if (!shouldRunScanner) {
     stopScanner()
   }
@@ -267,9 +273,6 @@ function render() {
           <p class="hero-copy">Please take a moment to review our Terms &amp; Conditions and Privacy Policy, then sign to receive your event check-in pass.</p>
           ${policyStateMarkup}
         </div>
-        <div class="mode-switch" role="tablist" aria-label="Application modes">
-          ${MODES.map(renderModeButton).join('')}
-        </div>
       </header>
 
       ${bannerMarkup}
@@ -277,9 +280,11 @@ function render() {
 
       <main class="content-grid">
         <section class="primary-card">
-          ${renderModePanel()}
+          ${state.showSettings ? renderSettingsPanel() : renderModePanel()}
         </section>
       </main>
+
+      ${renderFooter()}
     </div>
   `
 
@@ -292,9 +297,18 @@ function render() {
   }
 }
 
-function renderModeButton(mode) {
-  const active = state.mode === mode ? 'is-active' : ''
-  return `<button class="mode-switch__button ${active}" data-mode="${mode}" type="button" role="tab" aria-selected="${state.mode === mode}">${escapeHtml(MODE_LABELS[mode])}</button>`
+function renderFooter() {
+  return `
+    <footer class="footer">
+      <span class="footer__brand">Undefined Charity</span>
+      <span class="footer__sep">·</span>
+      <span class="footer__version">v${escapeHtml(APP_VERSION)}</span>
+      <span class="footer__sep">·</span>
+      <button type="button" class="footer__link" data-action="${state.showSettings ? 'close-settings' : 'open-settings'}">
+        ${state.showSettings ? '← Back' : 'Settings ⚙'}
+      </button>
+    </footer>
+  `
 }
 
 function renderPolicyState() {
@@ -357,12 +371,31 @@ function renderSigningPanel() {
     ? ''
     : '<p class="locked-note">Please read both policies (scroll to the end of each one) to enable the form.</p>'
 
-  return `
-    <div class="stack">
+  const intro = record
+    ? `
+      <div>
+        <h2>Your pass</h2>
+        <p>This is the pass you signed earlier. Show it to a member of staff at the door. If anything has changed, scroll down to re-sign.</p>
+      </div>
+    `
+    : `
       <div>
         <h2>Sign in</h2>
         <p>Please read both policies below, then enter your details and sign to receive your check-in pass.</p>
       </div>
+    `
+
+  const reSignHeading = record
+    ? `<div><h3>Re-sign</h3><p>Your details and signature will replace the saved pass above.</p></div>`
+    : ''
+
+  return `
+    <div class="stack">
+      ${intro}
+
+      ${record ? renderSubmissionCard(record) : ''}
+
+      ${reSignHeading}
 
       ${renderPolicyReader('terms', state.docs.terms, reads.terms)}
       ${renderPolicyReader('privacy', state.docs.privacy, reads.privacy)}
@@ -407,8 +440,6 @@ function renderSigningPanel() {
 
         <button class="primary-button" type="submit" ${disabledAttr}>Accept &amp; continue</button>
       </form>
-
-      ${record ? renderSubmissionCard(record) : ''}
     </div>
   `
 }
@@ -605,13 +636,188 @@ function renderCheckinResult() {
   `
 }
 
+function getStorageStats() {
+  let totalBytes = 0
+  const items = []
+  for (const [name, key] of Object.entries(STORAGE_KEYS)) {
+    const value = window.localStorage.getItem(key)
+    if (value !== null) {
+      const bytes = new Blob([key + value]).size
+      totalBytes += bytes
+      items.push({ name, key, bytes })
+    }
+  }
+  return { totalBytes, items }
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(2)} MB`
+}
+
+function formatRelative(isoString) {
+  if (!isoString) return 'never'
+  const then = new Date(isoString)
+  const diffMs = Date.now() - then.getTime()
+  if (diffMs < 60_000) return 'just now'
+  if (diffMs < 3_600_000) return `${Math.round(diffMs / 60_000)} min ago`
+  if (diffMs < 86_400_000) return `${Math.round(diffMs / 3_600_000)} hr ago`
+  return `${Math.round(diffMs / 86_400_000)} days ago`
+}
+
+function renderSettingsPanel() {
+  const isKiosk = state.mode === 'checkin'
+  const storage = getStorageStats()
+  const record = state.record
+  const recordSummary = record ? getRecordSummary(record) : null
+  const recordCurrent = record ? isRecordCurrent(record) : false
+
+  const kioskStats = isKiosk
+    ? `
+      <section class="settings-block">
+        <h3>Kiosk session</h3>
+        <ul class="settings-list">
+          <li><span>Unique passes scanned</span><strong>${kioskScanLog.size}</strong></li>
+          <li><span>Total scans</span><strong>${[...kioskScanLog.values()].reduce((sum, entry) => sum + entry.count, 0)}</strong></li>
+        </ul>
+        ${kioskScanLog.size > 0 ? '<button class="secondary-button" type="button" data-action="clear-scan-history">Clear scan history</button>' : ''}
+      </section>
+    `
+    : ''
+
+  return `
+    <div class="stack settings-panel">
+      <div>
+        <h2>Settings</h2>
+        <p>Behind-the-scenes details and controls for this device.</p>
+      </div>
+
+      <section class="settings-block">
+        <h3>Kiosk check-in mode</h3>
+        <p>Use this device to scan attendees\u2019 passes at the door instead of for signing.</p>
+        <label class="toggle">
+          <input type="checkbox" data-action="toggle-kiosk-mode" ${isKiosk ? 'checked' : ''} />
+          <span class="toggle__track"><span class="toggle__thumb"></span></span>
+          <span class="toggle__label">${isKiosk ? 'On — this device is in kiosk check-in mode' : 'Off — this device is for signing'}</span>
+        </label>
+      </section>
+
+      <section class="settings-block">
+        <h3>Saved pass</h3>
+        ${
+          record
+            ? `
+              <ul class="settings-list">
+                <li><span>Name</span><strong>${escapeHtml(recordSummary.name)}</strong></li>
+                <li><span>Signed</span><strong>${escapeHtml(formatSignedAt(recordSummary.signedAt))}</strong></li>
+                <li><span>Photo consent</span><strong>${escapeHtml(PHOTO_CONSENT_LABELS[recordSummary.photoConsent] ?? 'Unknown')}</strong></li>
+                <li><span>Status</span><strong style="color: ${recordCurrent ? '#047857' : '#b45309'};">${recordCurrent ? 'Up to date' : 'Out of date — please re-sign'}</strong></li>
+              </ul>
+              <button class="secondary-button" type="button" data-action="clear-saved-pass">Clear saved pass</button>
+            `
+            : '<p class="settings-empty">No pass saved on this device.</p>'
+        }
+      </section>
+
+      <section class="settings-block">
+        <h3>Current policies</h3>
+        ${
+          state.docs
+            ? `
+              <ul class="settings-list">
+                <li><span>Terms</span><strong>updated ${escapeHtml(state.docs.terms.lastUpdated)} <code>${escapeHtml(shortSha(state.docs.terms.sha))}</code></strong></li>
+                <li><span>Privacy</span><strong>updated ${escapeHtml(state.docs.privacy.lastUpdated)} <code>${escapeHtml(shortSha(state.docs.privacy.sha))}</code></strong></li>
+                <li><span>Last loaded</span><strong>${escapeHtml(formatRelative(state.docsLoadedAt))}</strong></li>
+              </ul>
+            `
+            : '<p class="settings-empty">Policies haven\u2019t loaded yet.</p>'
+        }
+        <button class="secondary-button" type="button" data-action="refresh-policies">Refresh policies</button>
+      </section>
+
+      ${kioskStats}
+
+      <section class="settings-block">
+        <h3>This device</h3>
+        <ul class="settings-list">
+          <li><span>App version</span><strong>v${escapeHtml(APP_VERSION)}</strong></li>
+          <li><span>Origin</span><strong><code>${escapeHtml(window.location.origin)}</code></strong></li>
+          <li><span>Local storage used</span><strong>${formatBytes(storage.totalBytes)}</strong></li>
+          ${storage.items.map((item) => `<li><span>&nbsp;\u00b7 <code>${escapeHtml(item.key)}</code></span><strong>${formatBytes(item.bytes)}</strong></li>`).join('')}
+        </ul>
+      </section>
+
+      <section class="settings-block">
+        <h3>Danger zone</h3>
+        <p>Clear all local data on this device. Won\u2019t affect anything on Undefined\u2019s servers.</p>
+        <button class="danger-button" type="button" data-action="reset-everything">Reset everything</button>
+      </section>
+    </div>
+  `
+}
+
 function bindUi() {
-  document.querySelectorAll('[data-mode]').forEach((button) => {
-    button.addEventListener('click', () => {
-      state.mode = button.dataset.mode
-      state.message = ''
-      render()
-    })
+  document.querySelector('[data-action="open-settings"]')?.addEventListener('click', () => {
+    state.showSettings = true
+    render()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  })
+
+  document.querySelector('[data-action="close-settings"]')?.addEventListener('click', () => {
+    state.showSettings = false
+    render()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  })
+
+  document.querySelector('[data-action="toggle-kiosk-mode"]')?.addEventListener('change', (event) => {
+    const enabled = event.target.checked
+    state.mode = enabled ? 'checkin' : 'sign'
+    state.checkinResult = null
+    if (enabled) {
+      saveJson(STORAGE_KEYS.mode, 'checkin')
+    } else {
+      window.localStorage.removeItem(STORAGE_KEYS.mode)
+    }
+    render()
+  })
+
+  document.querySelector('[data-action="clear-saved-pass"]')?.addEventListener('click', () => {
+    if (!confirm('Clear your saved pass from this device? You\u2019ll need to sign again before your next event.')) {
+      return
+    }
+    state.record = null
+    window.localStorage.removeItem(STORAGE_KEYS.record)
+    render()
+  })
+
+  document.querySelector('[data-action="clear-scan-history"]')?.addEventListener('click', () => {
+    if (!confirm('Clear the kiosk scan history for this session?')) {
+      return
+    }
+    kioskScanLog.clear()
+    state.checkinResult = null
+    render()
+  })
+
+  document.querySelector('[data-action="reset-everything"]')?.addEventListener('click', () => {
+    if (!confirm('Reset everything on this device? This clears your saved pass, kiosk mode, scan history, and all local data.')) {
+      return
+    }
+    Object.values(STORAGE_KEYS).forEach((key) => window.localStorage.removeItem(key))
+    kioskScanLog.clear()
+    state.record = null
+    state.mode = 'sign'
+    state.showSettings = false
+    state.checkinResult = null
+    state.drafts.sign = defaultFormDraft()
+    state.reads = { terms: false, privacy: false }
+    render()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  })
+
+  document.querySelector('[data-action="refresh-policies"]')?.addEventListener('click', () => {
+    void loadPolicyDocuments()
   })
 
   document.querySelector('[data-action="reload-docs"]')?.addEventListener('click', () => {
@@ -853,22 +1059,23 @@ async function submitSigningForm() {
   }
   state.message = ''
   state.record = record
-  saveJson(
-    STORAGE_KEYS.record,
-    createStoredRecord({
-      name: acceptance.name,
-      signedAt,
-      photoConsent,
-      payloadHash: acceptance.payloadHash,
-      termsSha: acceptance.terms.sha,
-      privacySha: acceptance.privacy.sha,
-    }),
-  )
+  persistRecord(record)
 
   state.drafts.sign = defaultFormDraft()
   state.reads = { terms: false, privacy: false }
   render()
   scrollToQrResult()
+}
+
+function persistRecord(record) {
+  saveJson(STORAGE_KEYS.record, {
+    acceptance: record.acceptance,
+    payload: record.payload,
+    qrDataUrl: record.qrDataUrl,
+    signatureDataUrl: record.signatureDataUrl,
+    omittedSignature: record.omittedSignature,
+    savedAt: new Date().toISOString(),
+  })
 }
 
 function scrollToQrResult() {
@@ -1183,19 +1390,6 @@ async function decodeAndStoreAcceptance(payload) {
     endpointResult,
   }
   render()
-}
-
-function createStoredRecord({ name, signedAt, photoConsent, termsSha, privacySha, payloadHash }) {
-  return {
-    summary: {
-      name,
-      signedAt,
-      photoConsent,
-      termsSha,
-      privacySha,
-    },
-    payloadHash,
-  }
 }
 
 function attachSignatureCanvases() {

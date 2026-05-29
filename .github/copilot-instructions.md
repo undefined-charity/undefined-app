@@ -39,12 +39,23 @@ Never reintroduce in-app editing of these. If new site-wide settings are needed,
 
 ## Modes
 
-Two modes, rendered from the same SPA, switched via the pill group in the hero:
+Two modes, rendered from the same SPA. The mode toggle now lives in **Settings** (footer link), not in the hero — so the default UI is uncluttered for first-time signers. Switching to check-in mode persists to `localStorage` under `undefined-app.mode` so a kiosk operator only sets it once.
 
-- `sign` (default) — attendee reads both policies (form is locked until each `.policy-reader__body` has been scrolled to the bottom), fills name/email/photo consent, signs, gets a pass.
+- `sign` (default) — attendee reads both policies (form is locked until each `.policy-reader__body` has been scrolled to the bottom), fills name/email/photo consent, signs, gets a pass. If a saved pass already exists, it renders **above** the sign form so the holder can show it without scrolling, with a "Re-sign" header introducing the form below.
 - `checkin` — staff scans a pass via camera, photo upload, or pasted code; banner-style warnings show at the top of the result for duplicate scans, mismatched issuer, or out-of-date policies; a large green/red callout shows the attendee's photography preference.
 
 The mode list lives in the `MODES` constant. The check-in scan log lives in the module-level `kioskScanLog` Map (cleared on full reload; intentional — "scan #N this session" is a kiosk-runtime concept).
+
+## Settings
+
+`state.showSettings` (boolean) overlays the primary card with a Settings panel. Rendered by `renderSettingsPanel()`. Contains:
+
+- Kiosk check-in mode toggle (writes / clears `STORAGE_KEYS.mode`)
+- Saved pass summary + "Clear saved pass" button (writes `STORAGE_KEYS.record`)
+- Live policy versions + short SHAs + last-loaded relative time + "Refresh policies" button
+- This-device stats: app version (`__APP_VERSION__` injected by Vite's `define`), origin, per-key localStorage size
+- Kiosk-only: scan-history stats + clear button
+- Danger zone: "Reset everything" wipes all `STORAGE_KEYS` entries and `kioskScanLog`
 
 ## Check-in pass format (`undefined-accept:v2:` prefix)
 
@@ -76,7 +87,8 @@ The endpoint must send `Access-Control-Allow-Origin` headers for cross-origin PO
 
 ## Persistence
 
-- `localStorage` key `undefined-app.record.v3` holds a tiny per-device summary of the last signed pass (name, signedAt, photoConsent, termsSha, privacySha, payloadHash). Nothing else is persisted client-side.
+- `localStorage` key `undefined-app.record.v3` holds the **full** last-issued pass on this device: the `acceptance` object, the `qrPayload` text, the rendered `qrDataUrl` PNG, and the `signatureDataUrl` PNG. This lets the saved pass re-render with its QR on return visits (the user explicitly opted in by signing; "Reset" or "Clear saved pass" in Settings removes it). `getRecordSummary` / `isRecordCurrent` retain fallback paths for older "summary-only" records so existing devices upgrade gracefully.
+- `localStorage` key `undefined-app.mode` is set to `"checkin"` when a kiosk operator flips kiosk mode on in Settings, and removed when they flip it off. Default (key absent) is `sign`.
 - No cookies, no IndexedDB, no analytics.
 
 ## User-facing copy
