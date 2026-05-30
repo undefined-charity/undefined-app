@@ -11,6 +11,7 @@ marked.use({ mangle: false, headerIds: false })
 const STORAGE_KEYS = {
   record: 'undefined-app.record.v3',
   mode: 'undefined-app.mode',
+  installDismissed: 'undefined-app.install-dismissed',
 }
 
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
@@ -49,19 +50,68 @@ const state = {
     pastedPayload: '',
   },
   reads: { terms: false, privacy: false },
+  installDismissed: loadJson(STORAGE_KEYS.installDismissed, false),
+  isStandalone: detectStandaloneDisplay(),
+  canInstall: false,
 }
 
 const app = document.querySelector('#app')
 let activeSignaturePad = null
 let activeSignatureKey = null
 let qrScanner = null
+let deferredInstallPrompt = null
 
 initialize()
 
 async function initialize() {
   registerServiceWorker()
+  watchInstallAvailability()
   render()
   await loadPolicyDocuments()
+}
+
+function detectStandaloneDisplay() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  const matchesStandalone =
+    typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches
+  return matchesStandalone || window.navigator.standalone === true
+}
+
+function isIosDevice() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+  const ua = window.navigator.userAgent || ''
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document)
+}
+
+function watchInstallAvailability() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault()
+    deferredInstallPrompt = event
+    state.canInstall = true
+    render()
+  })
+
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null
+    state.canInstall = false
+    state.isStandalone = true
+    render()
+  })
+
+  if (typeof window.matchMedia === 'function') {
+    window.matchMedia('(display-mode: standalone)').addEventListener?.('change', (event) => {
+      state.isStandalone = event.matches
+      render()
+    })
+  }
 }
 
 function defaultFormDraft() {
@@ -261,12 +311,14 @@ function render() {
 
   const policyStateMarkup = renderPolicyState()
   const bannerMarkup = renderBanner()
+  const installBannerMarkup = renderInstallBanner()
   const messageMarkup = state.message
     ? `<section class="banner banner--warning">${escapeHtml(state.message)}</section>`
     : ''
 
   app.innerHTML = `
     <div class="shell">
+      ${installBannerMarkup}
       <header class="hero">
         <div class="hero-main">
           <h1>Welcome to Undefined</h1>
@@ -326,6 +378,43 @@ function renderPolicyState() {
       <p class="status-pill">Privacy · updated ${escapeHtml(state.docs.privacy.lastUpdated)}</p>
     </div>
   `
+}
+
+function renderInstallBanner() {
+  if (state.isStandalone || state.installDismissed) {
+    return ''
+  }
+
+  if (state.canInstall && deferredInstallPrompt) {
+    return `
+      <section class="banner banner--install">
+        <div class="banner-install__text">
+          <strong>Install this app</strong>
+          <span>Add Undefined to your device for quick, offline access to your check-in pass.</span>
+        </div>
+        <div class="banner-install__actions">
+          <button class="primary-button" type="button" data-action="install-app">Install</button>
+          <button class="banner-dismiss" type="button" data-action="dismiss-install" aria-label="Dismiss install prompt">&times;</button>
+        </div>
+      </section>
+    `
+  }
+
+  if (isIosDevice()) {
+    return `
+      <section class="banner banner--install">
+        <div class="banner-install__text">
+          <strong>Install this app</strong>
+          <span>Tap the Share button, then choose &ldquo;Add to Home Screen&rdquo; to keep your check-in pass handy.</span>
+        </div>
+        <div class="banner-install__actions">
+          <button class="banner-dismiss" type="button" data-action="dismiss-install" aria-label="Dismiss install prompt">&times;</button>
+        </div>
+      </section>
+    `
+  }
+
+  return ''
 }
 
 function renderBanner() {
@@ -499,7 +588,7 @@ function renderSubmissionCard(record) {
           <li>Keep your downloaded pass image on this device to show at check-in.</li>
         </ul>
         <div class="button-row">
-          <button class="secondary-button" type="button" data-action="reset-sign">Done</button>
+          <button class="secondary-button" type="button" data-action="reset-sign">Reset</button>
         </div>
       </section>
     `
@@ -520,7 +609,7 @@ function renderSubmissionCard(record) {
       <div class="button-row">
         <a class="secondary-button" href="${record.qrDataUrl}" download="${escapeHtml(buildDownloadFilename(summary))}">Save image</a>
         ${state.shareSupported ? '<button class="secondary-button" type="button" data-action="share-qr">Share</button>' : ''}
-        <button class="primary-button" type="button" data-action="reset-sign">Done</button>
+        <button class="primary-button" type="button" data-action="reset-sign">Reset</button>
       </div>
     </section>
   `
@@ -758,6 +847,32 @@ function renderSettingsPanel() {
 }
 
 function bindUi() {
+  document.querySelector('[data-action="dismiss-install"]')?.addEventListener('click', () => {
+    state.installDismissed = true
+    saveJson(STORAGE_KEYS.installDismissed, true)
+    render()
+  })
+
+  document.querySelector('[data-action="install-app"]')?.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) {
+      return
+    }
+    deferredInstallPrompt.prompt()
+    let outcome = 'dismissed'
+    try {
+      ({ outcome } = await deferredInstallPrompt.userChoice)
+    } catch {
+      outcome = 'dismissed'
+    }
+    deferredInstallPrompt = null
+    state.canInstall = false
+    if (outcome === 'accepted') {
+      state.installDismissed = true
+      saveJson(STORAGE_KEYS.installDismissed, true)
+    }
+    render()
+  })
+
   document.querySelector('[data-action="open-settings"]')?.addEventListener('click', () => {
     state.showSettings = true
     render()
@@ -847,6 +962,9 @@ function bindUi() {
   })
 
   document.querySelector('[data-action="reset-sign"]')?.addEventListener('click', () => {
+    if (!confirm('Reset and clear your saved pass from this device? You\u2019ll need to sign again before your next event.')) {
+      return
+    }
     state.record = null
     state.drafts.sign = defaultFormDraft()
     state.reads = { terms: false, privacy: false }
