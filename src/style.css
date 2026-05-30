@@ -140,6 +140,56 @@ legend {
   color: #b45309;
 }
 
+.banner--install {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.banner-install__text {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.banner-install__text span {
+  font-weight: 500;
+}
+
+.banner-install__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.banner-dismiss {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  cursor: pointer;
+}
+
+.banner-dismiss:hover {
+  opacity: 0.7;
+}
+
+@media (max-width: 480px) {
+  .banner--install {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .banner-install__actions {
+    justify-content: flex-end;
+  }
+}
+
 .content-grid {
   display: grid;
   grid-template-columns: 1fr;

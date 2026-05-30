@@ -70,7 +70,7 @@ The browser POSTs to the n8n webhook from `tos.undefined.charity`, which is cros
 
 ## Privacy
 
-- Each device stores a tiny, non-identifying summary of the last issued pass in `localStorage` (under the key `undefined-app.record.v3`) so it can warn the holder when policies change. There is no other client-side persistence.
+- Each device stores a tiny, non-identifying summary of the last issued pass in `localStorage` (under the key `undefined-app.record.v3`) so it can warn the holder when policies change. A couple of other non-identifying preferences are also kept in `localStorage` — the selected mode (`undefined-app.mode`) and whether the "install this app" banner has been dismissed (`undefined-app.install-dismissed`). There is no other client-side persistence.
 - The full signature image is sent to the configured n8n webhook at signing time and is **not** retained on the device.
 - There is no analytics, no third-party tracking, no central database of attendees on Undefined's side — only whatever the n8n workflow chooses to record.
 
