@@ -862,7 +862,7 @@ function bindUi() {
     try {
       ({ outcome } = await deferredInstallPrompt.userChoice)
     } catch {
-      outcome = 'dismissed'
+      // Keep the default 'dismissed' outcome if the choice can't be read.
     }
     deferredInstallPrompt = null
     state.canInstall = false
