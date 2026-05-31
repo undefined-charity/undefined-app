@@ -280,8 +280,13 @@ function formatSignedAt(value) {
     return 'Unknown'
   }
   return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: APP_CONFIG.timeZone || 'America/Los_Angeles',
+    timeZoneName: 'short',
   }).format(new Date(value))
 }
 
@@ -1281,15 +1286,14 @@ async function decodeStrokes(signature) {
     return JSON.parse(fromBase64Url(signature.encoded))
   }
 
-  if (signature.compression === 'deflate-raw' && typeof DecompressionStream !== 'undefined') {
+  if (signature.compression === 'deflate-raw') {
+    if (typeof DecompressionStream === 'undefined') {
+      throw new Error('signature-unsupported-browser')
+    }
     const bytes = base64UrlToBytes(signature.encoded)
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
     const buffer = await new Response(stream).arrayBuffer()
     return JSON.parse(new TextDecoder().decode(buffer))
-  }
-
-  if (signature.compression === 'deflate-raw') {
-    throw new Error('This signature requires browser features that are not available on this device.')
   }
 
   throw new Error(`Unsupported signature compression: ${signature.compression}`)
@@ -1479,8 +1483,8 @@ async function decodeAndStoreAcceptance(payload) {
       signatureStrokes = await decodeStrokes(acceptance.signature)
     } catch (error) {
       signatureStrokes = null
-      signatureMessage = error instanceof Error && error.message
-        ? error.message
+      signatureMessage = error instanceof Error && error.message === 'signature-unsupported-browser'
+        ? 'The signature cannot be displayed on this device.'
         : 'The signature data could not be read.'
     }
   } else {
