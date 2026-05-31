@@ -254,7 +254,10 @@ function isAcceptanceCurrent(acceptance) {
   if (!acceptance) {
     return false
   }
-  const legacyVersion = buildPolicyVersion(acceptance?.terms?.sha, acceptance?.privacy?.sha)
+  const legacyVersion =
+    acceptance?.terms?.sha && acceptance?.privacy?.sha
+      ? buildPolicyVersion(acceptance.terms.sha, acceptance.privacy.sha)
+      : ''
   return isPolicyCurrent(acceptance.policyVersion || legacyVersion)
 }
 
