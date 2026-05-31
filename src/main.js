@@ -266,7 +266,11 @@ function isRecordCurrent(record) {
   if (acceptance) {
     return isAcceptanceCurrent(acceptance)
   }
-  return isPolicyCurrent(buildPolicyVersion(record?.summary?.termsSha, record?.summary?.privacySha))
+  const legacyVersion =
+    record?.summary?.termsSha && record?.summary?.privacySha
+      ? buildPolicyVersion(record.summary.termsSha, record.summary.privacySha)
+      : ''
+  return isPolicyCurrent(legacyVersion)
 }
 
 function canonicalJson(value) {
