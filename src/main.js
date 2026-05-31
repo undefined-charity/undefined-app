@@ -698,6 +698,9 @@ function renderCheckinResult() {
 
   const consentCallout = renderConsentCallout(acceptance.photoConsent)
 
+  const signatureMessage = acceptance.signature
+    ? 'This device could not decode the embedded signature.'
+    : 'This pass does not include a signature to display.'
   const signatureBlock = signatureStrokes && acceptance.signature
     ? `
       <div class="signature-display">
@@ -710,9 +713,7 @@ function renderCheckinResult() {
     : `
       <div class="signature-display">
         <span>Signature</span>
-        <p class="signature-display-note">${escapeHtml(acceptance.signature
-          ? 'This device could not decode the embedded signature.'
-          : 'This pass does not include a signature to display.')}</p>
+        <p class="signature-display-note">${escapeHtml(signatureMessage)}</p>
       </div>
     `
 
@@ -1424,10 +1425,12 @@ async function decodeAndStoreAcceptance(payload) {
   let acceptance
   try {
     acceptance = await decodeAcceptancePayload(payload)
-  } catch {
+  } catch (error) {
     state.checkinResult = {
       valid: false,
-      message: 'That doesn\u2019t look like an Undefined event pass.',
+      message: error instanceof Error && error.message
+        ? error.message
+        : 'That doesn\u2019t look like an Undefined event pass.',
     }
     render()
     return
@@ -1645,7 +1648,7 @@ async function compressPayload(value) {
 
 async function decompressPayload(bytes) {
   if (typeof DecompressionStream === 'undefined') {
-    throw new Error('Compressed passes are not supported on this device.')
+    throw new Error('This pass uses compressed data. Please use a modern browser that supports compressed passes.')
   }
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
   const buffer = await new Response(stream).arrayBuffer()
