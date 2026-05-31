@@ -29,14 +29,56 @@ Everything site-wide lives in [`src/config.js`](src/config.js) and is intentiona
 - `endpointUrl` — n8n webhook that receives every signing (`action: "agree"`) and every successful check-in (`action: "checkin"`).
 - `termsUrl` and `privacyUrl` — GitHub Contents API URLs for the canonical Terms and Privacy markdown documents. The app fetches these live on every launch.
 
-## How a check-in pass is verified
+## QR pass contents and verification
 
-There are no signing keys, certificates, or shared secrets. Each pass is a JSON payload containing the attendee's details, a snapshot of the policy versions, a SHA-256 of the signature image, and a SHA-256 of the whole canonicalised payload. New passes are encoded as `undefined-accept:v3:` followed by deflate-raw-compressed base64url data when the browser supports it, and fall back to the older plain `undefined-accept:v2:` base64url JSON format otherwise. At scan time the kiosk:
+There are no signing keys, certificates, or shared secrets. The QR text encodes an acceptance JSON payload.
+
+### What is inside the QR payload
+
+Passes currently use schema `undefined-charity/acceptance@2` and include:
+
+- `schema` — payload schema/version marker.
+- `issuer` — the origin that issued the pass (for example `https://tos.undefined.charity`).
+- `organization` — org label from config.
+- `eventLabel` — optional event label from config (omitted if empty).
+- `name`, `email`, `photoConsent`, `signedAt` — attendee details and signing timestamp.
+- `terms` and `privacy` — policy snapshots with commit SHA and "last updated" text.
+- `signatureHash` — SHA-256 hash of the captured signature PNG.
+- `signature` — optional compressed stroke data (`format: strokes-v1`) plus width/height. This is omitted when needed to stay within QR size budget.
+- `payloadHash` — SHA-256 hash of the canonicalised payload (excluding `payloadHash` itself) used as the tamper-evident integrity check.
+
+### How the QR payload is generated
+
+1. The app captures form data, current policy snapshots, and the drawn signature.
+2. It computes `signatureHash` from the signature PNG.
+3. It attempts to encode signature strokes for kiosk display.
+4. It computes `payloadHash` from canonical JSON (sorted keys, stable encoding).
+5. It encodes the final acceptance object into QR text:
+   - Preferred: `undefined-accept:v3:` + deflate-raw-compressed base64url JSON.
+   - Fallback: `undefined-accept:v2:` + plain base64url JSON.
+6. If the payload is too large, it regenerates the pass without the `signature` object (but still keeps `signatureHash`), then re-hashes and re-encodes.
+
+### What check-in actively uses today
+
+At scan time the kiosk decodes the payload and directly uses:
 
 1. Recomputes the payload hash and rejects the pass if it doesn't match (catches corruption or hand-edits).
 2. Compares the embedded `issuer` URL against its own origin and warns on mismatch (catches passes from a different deployment).
 3. Compares the embedded policy commit SHAs against the live policy commit SHAs and warns if the attendee should sign again.
 4. Looks the pass up in a per-session scan log and warns on a repeat scan.
+
+It also displays attendee details (`name`, `email`, `signedAt`, `photoConsent`) and renders the signature if a `signature` object is present and decodable.
+
+### Fields currently not used by in-app check-in logic
+
+These fields are carried in the QR payload but are not currently read by client-side check-in decisions/UI:
+
+- `schema`
+- `organization`
+- `eventLabel`
+- `signatureHash`
+
+They are still included in the hashed payload for tamper evidence, and the full acceptance object is forwarded to the configured webhook.
 
 The pass is tamper-evident, not authenticated — staff are expected to verify ID at the door for anything significant.
 
