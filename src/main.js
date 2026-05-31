@@ -1288,6 +1288,10 @@ async function decodeStrokes(signature) {
     return JSON.parse(new TextDecoder().decode(buffer))
   }
 
+  if (signature.compression === 'deflate-raw') {
+    throw new Error('This signature requires browser features that are not available on this device.')
+  }
+
   throw new Error(`Unsupported signature compression: ${signature.compression}`)
 }
 
@@ -1473,9 +1477,11 @@ async function decodeAndStoreAcceptance(payload) {
   if (acceptance.signature) {
     try {
       signatureStrokes = await decodeStrokes(acceptance.signature)
-    } catch {
+    } catch (error) {
       signatureStrokes = null
-      signatureMessage = 'The signature on this pass could not be shown on this device.'
+      signatureMessage = error instanceof Error && error.message
+        ? error.message
+        : 'The signature data could not be read.'
     }
   } else {
     signatureMessage = 'This pass does not include a signature to display.'
@@ -1650,7 +1656,7 @@ async function compressPayload(value) {
 
 async function decompressPayload(bytes) {
   if (typeof DecompressionStream === 'undefined') {
-    throw new Error('This pass was created with a newer version and cannot be read on this device. Please update this browser or try a different device.')
+    throw new Error('This pass requires compression support that is not available in this browser. Please try a different device or update your browser.')
   }
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
   const buffer = await new Response(stream).arrayBuffer()

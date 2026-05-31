@@ -30,7 +30,7 @@ Everything site-wide lives in [`src/config.js`](src/config.js) and is intentiona
 
 ## How a check-in pass is verified
 
-There are no signing keys, certificates, or shared secrets. Each pass is a base64url-encoded JSON object containing the attendee's details, a snapshot of the policy versions, a SHA-256 of the signature image, and a SHA-256 of the whole canonicalised payload. At scan time the kiosk:
+There are no signing keys, certificates, or shared secrets. Each pass is a JSON payload containing the attendee's details, a snapshot of the policy versions, a SHA-256 of the signature image, and a SHA-256 of the whole canonicalised payload. New passes are encoded as `undefined-accept:v3:` followed by deflate-raw-compressed base64url data when the browser supports it, and fall back to the older plain `undefined-accept:v2:` base64url JSON format otherwise. At scan time the kiosk:
 
 1. Recomputes the payload hash and rejects the pass if it doesn't match (catches corruption or hand-edits).
 2. Compares the embedded `issuer` URL against its own origin and warns on mismatch (catches passes from a different deployment).
