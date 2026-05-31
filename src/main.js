@@ -216,9 +216,17 @@ function currentPolicySnapshot() {
     return null
   }
   return {
-    terms: { sha: state.docs.terms.sha, lastUpdated: state.docs.terms.lastUpdated },
-    privacy: { sha: state.docs.privacy.sha, lastUpdated: state.docs.privacy.lastUpdated },
+    policyVersion: buildPolicyVersion(state.docs.terms.sha, state.docs.privacy.sha),
+    terms: { lastUpdated: state.docs.terms.lastUpdated },
+    privacy: { lastUpdated: state.docs.privacy.lastUpdated },
   }
+}
+
+function buildPolicyVersion(termsSha, privacySha) {
+  if (!termsSha || !privacySha) {
+    return ''
+  }
+  return `${termsSha}:${privacySha}`
 }
 
 function getRecordAcceptance(record) {
@@ -235,15 +243,22 @@ function getRecordSummary(record) {
   }
 }
 
-function isPolicyCurrent(termsSha, privacySha) {
-  if (!state.docs || !termsSha || !privacySha) {
+function isPolicyCurrent(policyVersion) {
+  if (!state.docs || !policyVersion) {
     return false
   }
-  return termsSha === state.docs.terms.sha && privacySha === state.docs.privacy.sha
+  return policyVersion === buildPolicyVersion(state.docs.terms.sha, state.docs.privacy.sha)
 }
 
 function isAcceptanceCurrent(acceptance) {
-  return isPolicyCurrent(acceptance?.terms?.sha, acceptance?.privacy?.sha)
+  if (!acceptance) {
+    return false
+  }
+  const legacyVersion =
+    acceptance?.terms?.sha && acceptance?.privacy?.sha
+      ? buildPolicyVersion(acceptance.terms.sha, acceptance.privacy.sha)
+      : ''
+  return isPolicyCurrent(acceptance.policyVersion || legacyVersion)
 }
 
 function isRecordCurrent(record) {
@@ -251,7 +266,11 @@ function isRecordCurrent(record) {
   if (acceptance) {
     return isAcceptanceCurrent(acceptance)
   }
-  return isPolicyCurrent(record?.summary?.termsSha, record?.summary?.privacySha)
+  const legacyVersion =
+    record?.summary?.termsSha && record?.summary?.privacySha
+      ? buildPolicyVersion(record.summary.termsSha, record.summary.privacySha)
+      : ''
+  return isPolicyCurrent(legacyVersion)
 }
 
 function canonicalJson(value) {
@@ -1143,17 +1162,14 @@ async function submitSigningForm() {
   const signature = await extractSignature()
 
   const baseAcceptance = {
-    schema: 'undefined-charity/acceptance@2',
     issuer: window.location.origin,
-    organization: APP_CONFIG.organizationName,
-    eventLabel: APP_CONFIG.eventLabel || undefined,
     name: formData.get('name').toString().trim(),
     email: formData.get('email').toString().trim(),
     photoConsent,
     signedAt,
+    policyVersion: snapshot.policyVersion,
     terms: snapshot.terms,
     privacy: snapshot.privacy,
-    signatureHash: signature.signatureHash,
   }
 
   let acceptance = await finalizeAcceptance(baseAcceptance, signature.qrSignature)
@@ -1223,11 +1239,9 @@ async function extractSignature() {
     stroke.points.map((p) => [Math.round(p.x), Math.round(p.y)]),
   ))
   const signatureDataUrl = activeSignaturePad.toDataURL('image/png')
-  const signatureHash = await hashText(signatureDataUrl)
   const encoded = await encodeStrokes(strokes)
   return {
     signatureDataUrl,
-    signatureHash,
     qrSignature: encoded ? { ...encoded, width, height, format: 'strokes-v1' } : null,
   }
 }
