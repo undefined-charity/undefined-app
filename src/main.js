@@ -1469,16 +1469,16 @@ async function decodeAndStoreAcceptance(payload) {
   })
 
   let signatureStrokes = null
-  let signatureMessage = acceptance.signature
-    ? 'The signature on this pass could not be shown on this device.'
-    : 'This pass does not include a signature to display.'
+  let signatureMessage = ''
   if (acceptance.signature) {
     try {
       signatureStrokes = await decodeStrokes(acceptance.signature)
-      signatureMessage = ''
     } catch {
       signatureStrokes = null
+      signatureMessage = 'The signature on this pass could not be shown on this device.'
     }
+  } else {
+    signatureMessage = 'This pass does not include a signature to display.'
   }
 
   let regeneratedQrDataUrl = ''
@@ -1650,7 +1650,7 @@ async function compressPayload(value) {
 
 async function decompressPayload(bytes) {
   if (typeof DecompressionStream === 'undefined') {
-    throw new Error('This pass requires a newer browser. Please try a different device or update this browser.')
+    throw new Error('This pass was created with a newer version and cannot be read on this device. Please update this browser or try a different device.')
   }
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
   const buffer = await new Response(stream).arrayBuffer()
