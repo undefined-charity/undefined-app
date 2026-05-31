@@ -17,6 +17,7 @@ const STORAGE_KEYS = {
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev'
 
 const ACCEPTANCE_PREFIX = 'undefined-accept:v2:'
+const ACCEPTANCE_COMPRESSED_PREFIX = 'undefined-accept:v3:'
 const PAYLOAD_BUDGET_BYTES = 2400
 const PHOTO_CONSENT_LABELS = {
   in: 'Opted in to event photography',
@@ -279,8 +280,13 @@ function formatSignedAt(value) {
     return 'Unknown'
   }
   return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: APP_CONFIG.timeZone || 'America/Los_Angeles',
+    timeZoneName: 'short',
   }).format(new Date(value))
 }
 
@@ -667,7 +673,7 @@ function renderCheckinResult() {
     `
   }
 
-  const { acceptance, current, issuerOk, duplicate, signatureStrokes } = state.checkinResult
+  const { acceptance, current, issuerOk, duplicate, signatureStrokes, signatureMessage } = state.checkinResult
 
   const banners = []
   if (duplicate) {
@@ -697,9 +703,8 @@ function renderCheckinResult() {
 
   const consentCallout = renderConsentCallout(acceptance.photoConsent)
 
-  let signatureBlock = ''
-  if (signatureStrokes && acceptance.signature) {
-    signatureBlock = `
+  const signatureBlock = signatureStrokes && acceptance.signature
+    ? `
       <div class="signature-display">
         <span>Signature</span>
         <canvas data-signature-canvas
@@ -707,7 +712,12 @@ function renderCheckinResult() {
                 data-signature-height="${escapeHtml(acceptance.signature.height)}"></canvas>
       </div>
     `
-  }
+    : `
+      <div class="signature-display">
+        <span>Signature</span>
+        <p class="signature-display-note">${escapeHtml(signatureMessage || 'This pass does not include a signature to display.')}</p>
+      </div>
+    `
 
   return `
     ${banners.join('')}
@@ -1147,14 +1157,14 @@ async function submitSigningForm() {
   }
 
   let acceptance = await finalizeAcceptance(baseAcceptance, signature.qrSignature)
-  let payload = encodeAcceptancePayload(acceptance)
+  let payload = await encodeAcceptancePayload(acceptance)
   let omittedSignature = false
 
   if (payload.length > PAYLOAD_BUDGET_BYTES && acceptance.signature) {
     omittedSignature = true
     const stripped = { ...baseAcceptance }
     acceptance = await finalizeAcceptance(stripped, null)
-    payload = encodeAcceptancePayload(acceptance)
+    payload = await encodeAcceptancePayload(acceptance)
   }
 
   const qrDataUrl = await createQrCodeDataUrl(payload)
@@ -1276,7 +1286,10 @@ async function decodeStrokes(signature) {
     return JSON.parse(fromBase64Url(signature.encoded))
   }
 
-  if (signature.compression === 'deflate-raw' && typeof DecompressionStream !== 'undefined') {
+  if (signature.compression === 'deflate-raw') {
+    if (typeof DecompressionStream === 'undefined') {
+      throw new Error('signature-unsupported-browser')
+    }
     const bytes = base64UrlToBytes(signature.encoded)
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
     const buffer = await new Response(stream).arrayBuffer()
@@ -1286,11 +1299,20 @@ async function decodeStrokes(signature) {
   throw new Error(`Unsupported signature compression: ${signature.compression}`)
 }
 
-function encodeAcceptancePayload(acceptance) {
-  return `${ACCEPTANCE_PREFIX}${toBase64Url(JSON.stringify(acceptance))}`
+async function encodeAcceptancePayload(acceptance) {
+  const json = JSON.stringify(acceptance)
+  const compressed = await compressPayload(json)
+  if (compressed) {
+    return `${ACCEPTANCE_COMPRESSED_PREFIX}${bytesToBase64Url(compressed)}`
+  }
+  return `${ACCEPTANCE_PREFIX}${toBase64Url(json)}`
 }
 
-function decodeAcceptancePayload(payload) {
+async function decodeAcceptancePayload(payload) {
+  if (payload.startsWith(ACCEPTANCE_COMPRESSED_PREFIX)) {
+    const bytes = base64UrlToBytes(payload.slice(ACCEPTANCE_COMPRESSED_PREFIX.length))
+    return JSON.parse(await decompressPayload(bytes))
+  }
   if (payload.startsWith(ACCEPTANCE_PREFIX)) {
     return JSON.parse(fromBase64Url(payload.slice(ACCEPTANCE_PREFIX.length)))
   }
@@ -1407,11 +1429,13 @@ async function decodeAndStoreAcceptance(payload) {
 
   let acceptance
   try {
-    acceptance = decodeAcceptancePayload(payload)
-  } catch {
+    acceptance = await decodeAcceptancePayload(payload)
+  } catch (error) {
     state.checkinResult = {
       valid: false,
-      message: 'That doesn\u2019t look like an Undefined event pass.',
+      message: error instanceof Error && error.message
+        ? error.message
+        : 'That doesn\u2019t look like an Undefined event pass.',
     }
     render()
     return
@@ -1453,12 +1477,18 @@ async function decodeAndStoreAcceptance(payload) {
   })
 
   let signatureStrokes = null
+  let signatureMessage = ''
   if (acceptance.signature) {
     try {
       signatureStrokes = await decodeStrokes(acceptance.signature)
-    } catch {
+    } catch (error) {
       signatureStrokes = null
+      signatureMessage = error instanceof Error && error.message === 'signature-unsupported-browser'
+        ? 'The signature cannot be displayed on this device.'
+        : 'The signature data could not be read.'
     }
+  } else {
+    signatureMessage = 'This pass does not include a signature to display.'
   }
 
   let regeneratedQrDataUrl = ''
@@ -1505,6 +1535,7 @@ async function decodeAndStoreAcceptance(payload) {
     expectedIssuer,
     duplicate,
     signatureStrokes,
+    signatureMessage,
     endpointResult,
   }
   render()
@@ -1612,4 +1643,26 @@ async function dataUrlToFile(dataUrl, filename) {
   const response = await fetch(dataUrl)
   const blob = await response.blob()
   return new File([blob], filename, { type: blob.type })
+}
+
+async function compressPayload(value) {
+  if (typeof CompressionStream === 'undefined') {
+    return null
+  }
+  try {
+    const stream = new Blob([value]).stream().pipeThrough(new CompressionStream('deflate-raw'))
+    const buffer = await new Response(stream).arrayBuffer()
+    return new Uint8Array(buffer)
+  } catch {
+    return null
+  }
+}
+
+async function decompressPayload(bytes) {
+  if (typeof DecompressionStream === 'undefined') {
+    throw new Error('This pass requires compression support that is not available in this browser. Please try a different device or update your browser.')
+  }
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
+  const buffer = await new Response(stream).arrayBuffer()
+  return new TextDecoder().decode(buffer)
 }
