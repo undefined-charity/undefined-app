@@ -668,7 +668,7 @@ function renderCheckinResult() {
     `
   }
 
-  const { acceptance, current, issuerOk, duplicate, signatureStrokes } = state.checkinResult
+  const { acceptance, current, issuerOk, duplicate, signatureStrokes, signatureMessage } = state.checkinResult
 
   const banners = []
   if (duplicate) {
@@ -698,9 +698,6 @@ function renderCheckinResult() {
 
   const consentCallout = renderConsentCallout(acceptance.photoConsent)
 
-  const signatureMessage = acceptance.signature
-    ? 'This device could not decode the embedded signature.'
-    : 'This pass does not include a signature to display.'
   const signatureBlock = signatureStrokes && acceptance.signature
     ? `
       <div class="signature-display">
@@ -713,7 +710,7 @@ function renderCheckinResult() {
     : `
       <div class="signature-display">
         <span>Signature</span>
-        <p class="signature-display-note">${escapeHtml(signatureMessage)}</p>
+        <p class="signature-display-note">${escapeHtml(signatureMessage || 'This pass does not include a signature to display.')}</p>
       </div>
     `
 
@@ -1472,9 +1469,13 @@ async function decodeAndStoreAcceptance(payload) {
   })
 
   let signatureStrokes = null
+  let signatureMessage = acceptance.signature
+    ? 'The signature on this pass could not be shown on this device.'
+    : 'This pass does not include a signature to display.'
   if (acceptance.signature) {
     try {
       signatureStrokes = await decodeStrokes(acceptance.signature)
+      signatureMessage = ''
     } catch {
       signatureStrokes = null
     }
@@ -1524,6 +1525,7 @@ async function decodeAndStoreAcceptance(payload) {
     expectedIssuer,
     duplicate,
     signatureStrokes,
+    signatureMessage,
     endpointResult,
   }
   render()
@@ -1648,7 +1650,7 @@ async function compressPayload(value) {
 
 async function decompressPayload(bytes) {
   if (typeof DecompressionStream === 'undefined') {
-    throw new Error('This pass uses compressed data. Please use a modern browser that supports compressed passes.')
+    throw new Error('This pass requires a newer browser. Please try a different device or update this browser.')
   }
   const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
   const buffer = await new Response(stream).arrayBuffer()
