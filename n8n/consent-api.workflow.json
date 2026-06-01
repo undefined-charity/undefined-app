@@ -141,6 +141,19 @@
         240,
         0
       ]
+    },
+    {
+      "id": "b584bd29-3d46-4de6-a8b8-8adb277af5df",
+      "name": "Dedupe recent agrees",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -320
+      ],
+      "parameters": {
+        "jsCode": "// Drop duplicate `agree` submissions for the same payloadHash (or email\n// fallback) within a 2-minute window. This is a server-side belt-and-braces\n// to the client-side submit-button debounce in src/main.js — it catches\n// double-taps from multiple devices, retried network requests, and other\n// cases where the same submission lands twice.\n//\n// State is kept in workflow static data (per-workflow, persisted across\n// executions). This is best-effort: two truly simultaneous executions\n// could both pass the check before either stores its timestamp, but the\n// real-world race window is small and the client-side debounce already\n// covers single-device double-taps.\n\nconst WINDOW_MS = 2 * 60 * 1000;\nconst staticData = $getWorkflowStaticData('global');\nconst recent = staticData.recentAgrees || {};\nconst now = Date.now();\n\nfor (const [key, ts] of Object.entries(recent)) {\n  if (typeof ts !== 'number' || now - ts > WINDOW_MS) {\n    delete recent[key];\n  }\n}\n\nconst passThrough = [];\nfor (const item of items) {\n  const body = (item.json && item.json.body) || {};\n  const acceptance = body.acceptance || {};\n  const hash = typeof acceptance.payloadHash === 'string' ? acceptance.payloadHash : '';\n  const email = typeof acceptance.email === 'string' ? acceptance.email.trim().toLowerCase() : '';\n  const key = hash || (email ? `email:${email}` : '');\n\n  if (!key) {\n    passThrough.push(item);\n    continue;\n  }\n\n  const lastSeen = recent[key];\n  if (typeof lastSeen === 'number' && now - lastSeen < WINDOW_MS) {\n    console.log(`[dedupe] dropping duplicate agree (key=${key}, age=${now - lastSeen}ms)`);\n    continue;\n  }\n\n  recent[key] = now;\n  passThrough.push(item);\n}\n\nstaticData.recentAgrees = recent;\nreturn passThrough;\n"
+      }
     }
   ],
   "connections": {
@@ -148,7 +161,7 @@
       "main": [
         [
           {
-            "node": "Send confirmation email",
+            "node": "Dedupe recent agrees",
             "type": "main",
             "index": 0
           }
@@ -178,6 +191,17 @@
         [
           {
             "node": "Route by action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe recent agrees": {
+      "main": [
+        [
+          {
+            "node": "Send confirmation email",
             "type": "main",
             "index": 0
           }

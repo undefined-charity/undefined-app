@@ -54,6 +54,7 @@ const state = {
   installDismissed: loadJson(STORAGE_KEYS.installDismissed, false),
   isStandalone: detectStandaloneDisplay(),
   canInstall: false,
+  submitting: false,
 }
 
 const app = document.querySelector('#app')
@@ -481,6 +482,9 @@ function renderSigningPanel() {
   const record = state.record
   const bothRead = reads.terms && reads.privacy
   const disabledAttr = bothRead ? '' : 'disabled'
+  const submitBusy = state.submitting
+  const submitDisabledAttr = !bothRead || submitBusy ? 'disabled' : ''
+  const submitLabel = submitBusy ? 'Sending\u2026' : 'Accept &amp; continue'
   const lockedNote = bothRead
     ? ''
     : '<p class="locked-note">Please read both policies (scroll to the end of each one) to enable the form.</p>'
@@ -552,7 +556,7 @@ function renderSigningPanel() {
           <canvas id="sign-signature" class="signature-canvas" aria-label="Signature pad"></canvas>
         </div>
 
-        <button class="primary-button" type="submit" ${disabledAttr}>Accept &amp; continue</button>
+        <button class="primary-button" type="submit" ${submitDisabledAttr}>${submitLabel}</button>
       </form>
     </div>
   `
@@ -1139,6 +1143,10 @@ function resizeSignatureCanvas(canvas) {
 }
 
 async function submitSigningForm() {
+  if (state.submitting) {
+    return
+  }
+
   if (!state.reads.terms || !state.reads.privacy) {
     state.message = 'Please read both policies to the end before continuing.'
     render()
@@ -1161,53 +1169,64 @@ async function submitSigningForm() {
   const snapshot = currentPolicySnapshot()
   const signature = await extractSignature()
 
-  const baseAcceptance = {
-    issuer: window.location.origin,
-    name: formData.get('name').toString().trim(),
-    email: formData.get('email').toString().trim(),
-    photoConsent,
-    signedAt,
-    policyVersion: snapshot.policyVersion,
-    terms: snapshot.terms,
-    privacy: snapshot.privacy,
+  state.submitting = true
+  const submitBtn = form.querySelector('button[type="submit"]')
+  if (submitBtn) {
+    submitBtn.disabled = true
+    submitBtn.textContent = 'Sending\u2026'
   }
 
-  let acceptance = await finalizeAcceptance(baseAcceptance, signature.qrSignature)
-  let payload = await encodeAcceptancePayload(acceptance)
-  let omittedSignature = false
+  try {
+    const baseAcceptance = {
+      issuer: window.location.origin,
+      name: formData.get('name').toString().trim(),
+      email: formData.get('email').toString().trim(),
+      photoConsent,
+      signedAt,
+      policyVersion: snapshot.policyVersion,
+      terms: snapshot.terms,
+      privacy: snapshot.privacy,
+    }
 
-  if (payload.length > PAYLOAD_BUDGET_BYTES && acceptance.signature) {
-    omittedSignature = true
-    const stripped = { ...baseAcceptance }
-    acceptance = await finalizeAcceptance(stripped, null)
-    payload = await encodeAcceptancePayload(acceptance)
+    let acceptance = await finalizeAcceptance(baseAcceptance, signature.qrSignature)
+    let payload = await encodeAcceptancePayload(acceptance)
+    let omittedSignature = false
+
+    if (payload.length > PAYLOAD_BUDGET_BYTES && acceptance.signature) {
+      omittedSignature = true
+      const stripped = { ...baseAcceptance }
+      acceptance = await finalizeAcceptance(stripped, null)
+      payload = await encodeAcceptancePayload(acceptance)
+    }
+
+    const qrDataUrl = await createQrCodeDataUrl(payload)
+    const endpointResult = await submitToEndpoint({
+      action: 'agree',
+      qrPayload: payload,
+      qrDataUrl,
+      acceptance,
+      signatureDataUrl: signature.signatureDataUrl,
+      issuer: acceptance.issuer,
+    })
+
+    const record = {
+      acceptance,
+      payload,
+      qrDataUrl,
+      endpointResult,
+      omittedSignature,
+      signatureDataUrl: signature.signatureDataUrl,
+    }
+    state.message = ''
+    state.record = record
+    persistRecord(record)
+
+    state.drafts.sign = defaultFormDraft()
+    state.reads = { terms: false, privacy: false }
+  } finally {
+    state.submitting = false
+    render()
   }
-
-  const qrDataUrl = await createQrCodeDataUrl(payload)
-  const endpointResult = await submitToEndpoint({
-    action: 'agree',
-    qrPayload: payload,
-    qrDataUrl,
-    acceptance,
-    signatureDataUrl: signature.signatureDataUrl,
-    issuer: acceptance.issuer,
-  })
-
-  const record = {
-    acceptance,
-    payload,
-    qrDataUrl,
-    endpointResult,
-    omittedSignature,
-    signatureDataUrl: signature.signatureDataUrl,
-  }
-  state.message = ''
-  state.record = record
-  persistRecord(record)
-
-  state.drafts.sign = defaultFormDraft()
-  state.reads = { terms: false, privacy: false }
-  render()
   scrollToQrResult()
 }
 
